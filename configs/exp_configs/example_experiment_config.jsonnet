@@ -1,0 +1,1 @@
+local data_config = import 'data_config'
