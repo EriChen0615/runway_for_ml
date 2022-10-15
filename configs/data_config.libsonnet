@@ -12,8 +12,8 @@
 // };
 
 local example_feature_loader = {
-  feature_loader_class: "YOUR FEATURE_LOADER CLASS NAME",
-  feature_loader_args: { // arguments to feature_loader init
+  name: "YOUR FEATURE_LOADER CLASS NAME",
+  args: { // arguments to feature_loader init
     train: "FILE LOCATION OF TRAINING DATA",
     test: "FILE LOCATION OF TEST DATA"
   },
@@ -64,7 +64,7 @@ local example_data_pipeline = {
   ],
   local test_transforms = [
     {
-      type: "Transform function name",
+      name: "Transform function name",
       use_features: [],
       args: {},
       out_features: ["col2"],
