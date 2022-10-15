@@ -62,7 +62,7 @@ local example_data_pipeline = {
       batched: 1,
     },
   ],
-  local test_transform = [
+  local test_transforms = [
     {
       type: "Transform function name",
       use_features: [],
@@ -71,10 +71,14 @@ local example_data_pipeline = {
       batched: 1,
     },
   ],
-  local valid_transform = train_transforms,
+  local valid_transforms = train_transforms,
   transforms: {
     train: train_transforms,
     test: test_transforms,
     valid: valid_transforms,
   },
 };
+
+{
+  "example_data_pipeline": example_data_pipeline
+}

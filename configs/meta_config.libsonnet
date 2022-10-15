@@ -11,7 +11,7 @@ local seed=2022;
 local wandb_cache_dir = "./wandb_cache/"; # find out; directory to wandb cache
 local default_cache_folder = "./local_cache/"; # find out;
 
-local meta = {
+local meta_config = {
   "DATA_FOLDER": "", # find out
   "EXPERIMENT_FOLDER": "./experiments/", # find out
   "TENSORBOARD_FOLDER": "./tensorboards/", 
@@ -29,3 +29,7 @@ local meta = {
   "cuda": 0,
   "gpu_device":0,
 };
+
+{
+  meta_config: meta_config
+}
