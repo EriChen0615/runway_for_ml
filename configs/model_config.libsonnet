@@ -5,9 +5,6 @@
 // 4. The default training/testing/validation hyperparameters
 // These can be overriden in experiment configuration file, or by using commandline options
 
-
-local dataloader_conf = import 'dataloader_config.jsonnet';
-
 // training/testing/validation hyperparameters
 local train_batch_size = 32;
 local valid_batch_size = 32;
@@ -23,9 +20,7 @@ local gradient_accumulation_steps = 4;
 local gradient_clipping = 0;
 local warmup_steps = 0;
 
-local seed=2021;
-
-
+// local seed=2021; // override as appropriate
 
 local override = {
   "platform_type": "pytorch",

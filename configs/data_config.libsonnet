@@ -13,7 +13,7 @@
 
 local example_feature_loader = {
   name: "YOUR FEATURE_LOADER CLASS NAME",
-  args: { // arguments to feature_loader init
+  kwargs: { // arguments to feature_loader init
     train: "FILE LOCATION OF TRAINING DATA",
     test: "FILE LOCATION OF TEST DATA"
   },
@@ -32,9 +32,23 @@ local example_feature_loader = {
 //   ],
 // };
 
+local default_dataloader_args = {
+  batch_size: 1,
+  shuffle: false,
+  sampler: null,
+}; // see https://pytorch.org/docs/stable/data.html for arguments
+
 local example_data_pipeline = {
-  data_pipeline_class: "YOUR DATA_PIPELINE CLASS NAME",
-  data_pipeline_args: { // arguments to data_pipeline_args
+  dataloader_args: {
+    train: default_dataloader_args {
+      shuffle: true // override
+    },
+    test: default_dataloader_args {
+
+    },
+    valid: default_dataloader_args {
+
+    },
   },
   in_features: [ // features used by the pipelines (MUST BE available at init)
     {
@@ -50,14 +64,14 @@ local example_data_pipeline = {
     {
       type: "Transform function name 1",
       use_features: [],
-      args: {},
+      kwargs: {},
       out_features: ["col1", "col2"], // override col1; if 'col1+', result will be appended to col1
       batched: 0,
     },
     {
       type: "Transform function name 2",
       use_features: ["col2"], // out_feature in previous transform is available
-      args: {},
+      kwargs: {},
       out_features: ["col2+"], // override col1; if 'col1+', result will be appended to col1
       batched: 1,
     },
@@ -66,7 +80,7 @@ local example_data_pipeline = {
     {
       name: "Transform function name",
       use_features: [],
-      args: {},
+      kwargs: {},
       out_features: ["col2"],
       batched: 1,
     },
