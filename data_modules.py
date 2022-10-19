@@ -10,9 +10,9 @@ import os
 FeatureLoader_Registry = EasyDict() # registry for feature loaders
 DataTransform_Registry = EasyDict() # registry for data transforms
 
-def register_to(registry):
+def register_to(registry, name=None):
     def _register_func(func):
-        fn = func.__name__
+        fn = name or func.__name__
         registry[fn] = func
         def _func_wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -98,13 +98,15 @@ class DataPipeline:
         
     def load_features(self):
         for in_feature in self.in_features:
-            fname = in_feature.feature_name
+            feature_names = in_feature.feature_names
             fl_name = in_feature.feature_loader.name
             fl_kwargs = in_feature.feature_loader.kwargs
             splits = in_feature.splits
             use_cache = in_feature.use_cache
             for split in splits:
-                self.data[split][fname] = FeatureLoader_Registry.fl_name(**fl_kwargs, use_cache=use_cache, split=split)
+                loaded_data = FeatureLoader_Registry.fl_name(**fl_kwargs, use_cache=use_cache, split=split)
+                for feat_name in feature_names:
+                    self.data[split].feat_name = loaded_data[split][feat_name]
     
     def apply_transforms(self):
         for split in ['train', 'test', 'valid']:
@@ -112,7 +114,7 @@ class DataPipeline:
                 transform_fn = transform.name
                 use_feature_names = transform.use_features
                 outputs = DataTransform_Registry.transform_fn(
-                    in_features={fname: self.data[split].fname for fname in use_feature_names},
+                    in_features={fname: self.data[split][fname] for fname in use_feature_names},
                     **transform.kwargs,
                 )
                 out_fields = set()

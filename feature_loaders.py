@@ -4,6 +4,20 @@ from easydict import EasyDict
 from collections import defaultdict
 from datasets import load_dataset, Image
 
+def LoadHFDataset(dataset_name, fields=[]):
+    hf_ds = load_dataset(dataset_name)
+    ds = defaultdict(EasyDict)
+    for split in ['train', 'test', 'validation']:
+        if len(fields) == 0:
+            ds[split] = hf_ds[split]
+        else:
+            all_columns = set(hf_ds[split].features.keys())
+            keep_fields = set(fields)
+            remove_fields = all_columns - keep_fields
+            ds[split] = hf_ds[split].remove_columns(list(remove_fields))
+    ds['valid'] = ds.pop('validation')
+    return ds
+
 @register_to(FeatureLoader_Registry)
 def LoadSGDWithSchema():
     dataset = defaultdict(EasyDict)
@@ -25,16 +39,4 @@ def LoadBeansDataset():
     # ds['valid'] = ds['validation']
     # return ds
 
-def LoadHFDataset(dataset_name, fields=[]):
-    hf_ds = load_dataset(dataset_name)
-    ds = defaultdict(EasyDict)
-    for split in ['train', 'test', 'validation']:
-        if len(fields) == 0:
-            ds[split] = hf_ds[split]
-        else:
-            all_columns = set(hf_ds[split].features.keys())
-            keep_fields = set(fields)
-            remove_fields = all_columns - keep_fields
-            ds[split] = hf_ds[split].remove_columns(list(remove_fields))
-    ds['valid'] = ds.pop('validation')
-    return ds
+

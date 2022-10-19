@@ -12,11 +12,8 @@
 // };
 
 local example_feature_loader = {
-  name: "YOUR FEATURE_LOADER CLASS NAME",
-  kwargs: { // arguments to feature_loader init
-    train: "FILE LOCATION OF TRAINING DATA",
-    test: "FILE LOCATION OF TEST DATA"
-  },
+  name: "LoadBeansDataset",
+  // kwargs: {}, // arguments to feature_loader init
   cache_data: true,
   use_cache: true,
 };
@@ -41,8 +38,8 @@ local default_dataloader_args = {
 }; // see https://pytorch.org/docs/stable/data.html for arguments
 
 local example_data_pipeline = {
-  name: 'example_data_pipeline',
-  regenerate: true,
+  name: 'LoadBeansDataset',
+  regenerate: false,
   dataloader_args: {
     train: default_dataloader_args {
       shuffle: true // override
@@ -56,7 +53,7 @@ local example_data_pipeline = {
   },
   in_features: [ // features used by the pipelines (MUST BE available at init)
     {
-      feature_name: "in_feature_name",
+      feature_names: ['image', 'labels'],
       feature_loader: example_feature_loader,
       splits: ["train", "test", "valid"], // the splits available
       use_cache: true,

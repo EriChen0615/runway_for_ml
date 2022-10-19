@@ -2,6 +2,56 @@ from easydict import EasyDict
 from data_modules import register_to, FeatureLoader_Registry, DataTransform_Registry
 from transformers import AutoTokenizer
 import copy
+import pandas as pd
+from torchvision.transforms import ColorJitter, ToTensor
+
+def multi_feature_row_transform(row_transform_fn):
+    """
+    NOTE: there is overhead to combine multiple features into a dataframe
+    """
+    def _transform_wrapper(in_features, *args, **kwargs):
+        df = pd.DataFrame(in_features)
+        outputs = df.apply(lambda row: row_transform_fn(row, *args, **kwargs))
+        output_cols = {feat_name: [] for feat_name in in_features.keys()}
+        for output in outputs:
+            for col_name in output_cols:
+                output_cols[col_name].append(output[col_name])
+        res_df = pd.concat([df, pd.DataFrame(output_cols)], ignore_index=True)
+        return {col_name: res_df[col_name] for col_name in res_df}
+    return _transform_wrapper
+
+def single_feature_row_transform(row_transform_fn):
+    """
+    Decorator: transforms a single feature row by row
+    """
+    func_name = row_transform_fn.__name__
+    DataTransform_Registry[func_name] = 
+    def _transform_wrapper(in_features, *args, **kwargs):
+        transformed_data = None
+        for feat_name, feat_data in in_features.item():
+            transformed_data = [row_transform_fn(row, *args, **kwargs) for row in feat_data]
+        return {feat_name: transformed_data}
+    return _transform_wrapper
+
+def ComposeTransforms(transform_fns):
+    def _compose_wrapper(inputs, *args, **kwargs):
+        res = copy.deepcopy(inputs)
+        for t in transform_fns:
+            res = t(res, *args, **kwargs)
+        return res
+    return _compose_wrapper
+
+@register_to(DataTransform_Registry, name="ColorJitterTransform")
+@single_feature_row_transform
+def ColorJitterTransform(
+    image,
+    brightness=0.5,
+    hue=0.5,
+    ):
+    func = ColorJitter(brightness=brightness, hue=hue)
+    transformed_image = func(image)
+    return transformed_image
+
 
 @register_to(DataTransform_Registry)
 def CopyFields( 
