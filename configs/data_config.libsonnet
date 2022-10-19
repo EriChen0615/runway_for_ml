@@ -17,7 +17,8 @@ local example_feature_loader = {
     train: "FILE LOCATION OF TRAINING DATA",
     test: "FILE LOCATION OF TEST DATA"
   },
-  cache: 0,
+  cache_data: true,
+  use_cache: true,
 };
 
 // local example_data_source = {
@@ -58,7 +59,7 @@ local example_data_pipeline = {
       feature_name: "in_feature_name",
       feature_loader: example_feature_loader,
       splits: ["train", "test", "valid"], // the splits available
-      use_cache: 1,
+      use_cache: true,
     },
   ],
 

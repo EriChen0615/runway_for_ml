@@ -70,58 +70,49 @@ class DataPipelineConfig(ConfigClass):
         self.cache_data = config_dict.get('cache_data') or True
 
 
+# @dataclass
+# class ModelConfig(ConfigClass):
+#     base_model: str
+#     ModelClass: str
+#     TokenizerClass: str
+#     TokenizerModelVersion: str
+#     ConfigClass: str
+#     special_tokens: List[Dict[str, any]]
+#     input_transforms: List[any]
+#     decode_input_transforms: List[any]
+#     output_transforms: List[any]
 
 
+# @dataclass
+# class LoggingConfig(ConfigClass):
+#     name: str
 
+# @dataclass
+# class TrainingConfig(ConfigClass):
+#     executor_class: str
+#     epochs: int
+#     batch_size: int
+#     lr: float
+#     scheduler: str
+#     additional: Dict[str, any]
 
+# @dataclass
+# class ValidationConfig(ConfigClass):
+#     batch_size: int
+#     step_size: int
+#     break_interval: int
+#     additional: Dict[str, any]
 
-
-        
-
-
-@dataclass
-class ModelConfig(ConfigClass):
-    base_model: str
-    ModelClass: str
-    TokenizerClass: str
-    TokenizerModelVersion: str
-    ConfigClass: str
-    special_tokens: List[Dict[str, any]]
-    input_transforms: List[any]
-    decode_input_transforms: List[any]
-    output_transforms: List[any]
-
-
-@dataclass
-class LoggingConfig(ConfigClass):
-    name: str
-
-@dataclass
-class TrainingConfig(ConfigClass):
-    executor_class: str
-    epochs: int
-    batch_size: int
-    lr: float
-    scheduler: str
-    additional: Dict[str, any]
-
-@dataclass
-class ValidationConfig(ConfigClass):
-    batch_size: int
-    step_size: int
-    break_interval: int
-    additional: Dict[str, any]
-
-@dataclass
-class TestingConfig(ConfigClass):
-    evaluation_name: str
-    load_epoch: int
-    load_model_path: str
-    load_best_model: bool
-    batch_size: int
-    num_evaluation: int
-    additional: Dict[str, any]
-    metrics: List[Dict[str, str]]
+# @dataclass
+# class TestingConfig(ConfigClass):
+#     evaluation_name: str
+#     load_epoch: int
+#     load_model_path: str
+#     load_best_model: bool
+#     batch_size: int
+#     num_evaluation: int
+#     additional: Dict[str, any]
+#     metrics: List[Dict[str, str]]
 
 
 

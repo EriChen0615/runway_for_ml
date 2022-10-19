@@ -16,9 +16,18 @@ meta_config = MetaConfig()
 dp_config = DataPipelineConfig() # data pipeline config
 
 CONFIG_FILE = os.path.join('configs', 'exp_configs', 'example_experiment_config.jsonnet')
-if __name__ == '__main__':
-    config = read_config(CONFIG_FILE)
+
+def initialize_config(config_file):
+    config = read_config(config_file)
     meta_config.from_config(config)  
     dp_config.from_config(config, meta_config)
-    print(dp_config)
+
+def prepare_data():
+    data_pipeline = DataPipeline(dp_config)
+    processed_data = data_pipeline.run()
     pass
+
+
+if __name__ == '__main__':
+    # initialize_config(CONFIG_FILE)
+    

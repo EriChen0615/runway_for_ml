@@ -19,6 +19,18 @@ def register_to(registry):
         return _func_wrapper
     return _register_func
 
+# def cache_feature_loader():
+#     def _loader_func(load_func):
+#         fname = load_func.__name__
+#         def _func_wrapper(*args, **kwargs):
+#             if kwargs.get('use_cache') and cache_file_exists():
+#                 pass # use cache
+#             else:
+#                 return load_func(*args, **kwargs)
+#         return _func_wrapper
+#         if kwargs.get('use')
+#     return _loader_func
+
 class MapDataset(torch.utils.data.Dataset):
     def __init__(
         self,

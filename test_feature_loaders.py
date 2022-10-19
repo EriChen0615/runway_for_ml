@@ -1,7 +1,8 @@
-import sys
-sys.path.append('..')
-from ..feature_loaders import LoadSGDWithSchema
+from feature_loaders import (
+    LoadSGDWithSchema,
+    LoadBeansDataset,
+) 
 
 if __name__ == "__main__":
-    sgd_dataset = LoadSGDWithSchema()
+    ds = LoadBeansDataset()
     pass
