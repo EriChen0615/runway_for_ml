@@ -17,6 +17,7 @@ local example_feature_loader = {
     train: "FILE LOCATION OF TRAINING DATA",
     test: "FILE LOCATION OF TEST DATA"
   },
+  cache: 0,
 };
 
 // local example_data_source = {

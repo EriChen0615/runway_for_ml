@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from easydict import EasyDict
 from collections import defaultdict
+from configuration import DataPipelineConfig
 import torch
+from typing import Union, List, Dict, Optional
 
 FeatureLoader_Registry = EasyDict() # registry for feature loaders
 DataTransform_Registry = EasyDict() # registry for data transforms
@@ -18,18 +20,26 @@ def register_to(registry):
 class MapDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        data,
-        use_features,
+        data: Dict[str, any],
+        use_features: List[str] = [],
         ):
         self.data = EasyDict()
         self.use_features = use_features
         self.col_len = 0 
-        for feature in self.use_features:
-            self.data[feature] = data.feature
-            if self.col_len == 0:
-                self.col_len = len(self.data[feature])
-            else:
-                assert self.col_len == len(self.data[feature]), "all features (columns) must be of the same length"
+        if use_features == []:
+            for feature, col in data.items():
+                self.data[feature] = col
+                if self.col_len == 0:
+                    self.col_len = len(col)
+                else:
+                    assert self.col_len == len(col), "all features (columns) must be of the same length"
+        else: # use_features is a list
+            for feature in self.use_features:
+                self.data[feature] = data.feature
+                if self.col_len == 0:
+                    self.col_len = len(self.data[feature])
+                else:
+                    assert self.col_len == len(self.data[feature]), "all features (columns) must be of the same length"
     
     def __len__(self):
         return self.col_len
@@ -41,7 +51,7 @@ class MapDataset(torch.utils.data.Dataset):
 class DataPipeline:
     def __init__(
         self, 
-        config,
+        config: DataPipelineConfig,
         ):
         self.config = config
         self.in_features = self.config.in_features
@@ -94,7 +104,7 @@ class DataPipeline:
                         out_fields.add(colname)
             # only select the columns specified in `out_fields`
             self.out_data[split] = self._select_cols(split, list(out_fields))
-            self.result_datasets[split] = MapDataset(self.out_data[split])
+            self.result_datasets[split] = MapDataset(self.out_data[split], use_features=[]) # all
     
     def train_dataloader(self):
         return torch.utils.data.DataLoader(

@@ -9,7 +9,7 @@ local seed=2022;
 
 // data cache configuration
 local wandb_cache_dir = "./wandb_cache/"; # find out; directory to wandb cache
-local default_cache_folder = "./local_cache/"; # find out;
+local default_cache_dir = "./local_cache/"; # find out;
 
 local meta_config = {
   "DATA_FOLDER": "", # find out
@@ -23,9 +23,10 @@ local meta_config = {
   "platform_type": "pytorch",
   "ignore_pretrained_weights": [],
   "seed": seed,
-  "cache":{ # find out
-      "default_folder": default_cache_folder,
-  },
+  // "cache":{ # find out
+  //     "default_dir": default_cache_dir,
+  // },
+  "default_cache_dir": default_cache_dir,
   "cuda": 0,
   "gpu_device":0,
 };

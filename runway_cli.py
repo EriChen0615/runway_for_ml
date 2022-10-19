@@ -21,6 +21,7 @@ def init(dest_dir):
     runway_dir = pathlib.Path(__file__).parent.resolve() # get parent directory
     click.echo(runway_dir)
     shutil.copytree(os.path.join(runway_dir, 'configs'), os.path.join(dest_dir, 'configs/'))
+    shutil.copytree(os.path.join(runway_dir, 'code_templates'), ".")
     click.echo("Project initialized. Welcome to Runway!")
 
 @click.command('hi')
