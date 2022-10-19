@@ -4,6 +4,7 @@ from easydict import EasyDict
 import logging
 logger = logging.getLogger(__name__)
 from utils.dirs import create_dirs
+from typing import Dict
 
 
 def save_cached_data(config, data_to_save, data_name, data_path=''):
@@ -66,3 +67,61 @@ def load_cached_data(config, data_name, data_path='', condition=True):
     else:
         # This data is not cached
         return None
+
+def cache_file_exists(data_file_name):
+    return os.path.exists(data_file_name)
+    
+def cache_data_to_disk(
+    data_to_save: Dict[str, any],
+    data_name: str,
+    dir_path: str, 
+    save_format: str = 'pkl',
+    ):
+    """
+    cache data_to_dist to disk at location `dir_path/data_name`
+    """
+    if not os.path.exists(dir_path):
+        create_dirs[dir_path]
+    
+    data_file_name = os.path.join(dir_path, f"{data_name}.{save_format}")
+    
+    if save_format == 'pkl':
+        save_pickle_data(data_to_save, data_file_name)
+    else:
+        raise NotImplementedError(f"Saving data to disk with {save_format} is not implemented!")
+
+def load_data_from_disk(
+    data_name: str,
+    dir_path: str,
+    save_format: str = 'pkl',
+    ):
+    data_file_name = os.path.join(dir_path, f"{data_name}.{save_format}")
+    if os.path.exists(data_file_name):
+        if save_format == 'pkl':
+            loaded_data = load_pickle_data(data_file_name)
+            return loaded_data
+        else:
+            raise NotImplementedError(f".{save_format} loading is not implemented in cache system!")
+    else:
+        return None # data doesn't exist
+        
+
+def save_pickle_data(data_to_save, data_file_name):
+    with open(data_file_name, 'wb') as f:
+        dump_data = {
+            'cache': data_to_save,
+        }
+        pickle.dump(dump_data, f)
+
+def load_pickle_data(data_file_name):
+    with open(data_file_name, 'rb') as f:
+        load_pickle_data = pickle.load(f)['cache']
+        return EasyDict(load_pickle_data)
+
+
+
+
+
+
+
+    

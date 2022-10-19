@@ -4,6 +4,8 @@ from collections import defaultdict
 from configuration import DataPipelineConfig
 import torch
 from typing import Union, List, Dict, Optional
+from utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists
+import os 
 
 FeatureLoader_Registry = EasyDict() # registry for feature loaders
 DataTransform_Registry = EasyDict() # registry for data transforms
@@ -54,11 +56,19 @@ class DataPipeline:
         config: DataPipelineConfig,
         ):
         self.config = config
+
+        self.name = self.config.name
+        self.cache_dir = self.config.cache_dir
+        self.cache_file_name = os.path.join(self.cache_dir, self.name)
+        self.regenerate = self.config.get('regenerate') or True
+        self.cache_data = self.config.get('cache_data') or True
+
+        self.dataloader_args = self.config.dataloader_args
         self.in_features = self.config.in_features
         self.transforms = EasyDict(self.config.transforms)
+
         self.data = defaultdict(EasyDict) # underlying storage class must be enumerable, but otherwise no assumptions
         self.out_data = defaultdict(EasyDict) # container for output data after transformation
-        self.dataloader_args = self.config.dataloader_args
         self.result_datasets = EasyDict()
     
     def _assign_to_col(self, split, colname, data):
@@ -104,7 +114,26 @@ class DataPipeline:
                         out_fields.add(colname)
             # only select the columns specified in `out_fields`
             self.out_data[split] = self._select_cols(split, list(out_fields))
+            self._convert_out_data_to_datasets()
+        
+    def _convert_out_data_to_datasets(self): # make MapDataset with split_name as key
+        for split in ['train', 'test', 'valid']:
             self.result_datasets[split] = MapDataset(self.out_data[split], use_features=[]) # all
+    
+    def run(self):
+        """
+        Run the data pipeline. Load cache data or apply transform. 
+        Return self.out_data
+        """
+        if self.regenerate or not cache_file_exists(self.cache_file_name):
+            self.apply_transforms()
+            if self.cache_data:
+                cache_data_to_disk(self.out_data, self.cache_file_name)
+        else:
+            self.out_data = load_data_from_disk(self.cache_file_name)
+            self._convert_out_data_to_datasets()
+        return self.out_data
+            
     
     def train_dataloader(self):
         return torch.utils.data.DataLoader(

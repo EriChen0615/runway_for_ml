@@ -40,6 +40,8 @@ local default_dataloader_args = {
 }; // see https://pytorch.org/docs/stable/data.html for arguments
 
 local example_data_pipeline = {
+  name: 'example_data_pipeline',
+  regenerate: true,
   dataloader_args: {
     train: default_dataloader_args {
       shuffle: true // override

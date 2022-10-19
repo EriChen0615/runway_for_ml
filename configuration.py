@@ -51,20 +51,36 @@ class MetaConfig(ConfigClass):
 
 
 @dataclass
-class DataPipelineConfig:
+class DataPipelineConfig(ConfigClass):
+    name: str = ""
     in_features: List[Dict[str, any]] = None 
     transforms: Dict[str, Dict[str, any]] = None # [split - [key - value]]
     dataloader_args: Dict[str, Dict[str, any]] = None # [split - [arg_name - arg_value]]
+    cache_dir: str = ""
+    regenerate: bool = True
 
     def from_config(self, config: Dict[str, any], meta_config: Dict[str, any]):
         config_dict = config.data_pipeline
+        self.name = config['name'] if 'name' in config else "DefaultDataPipeline"
         self.in_features = config_dict['in_features']
         self.transforms = EasyDict(config_dict['transforms'])
         self.dataloader_args = EasyDict(config_dict['dataloader_args'])
+        self.cache_dir = config_dict['cache_dir'] if 'cache_dir' in config_dict else meta_config.default_cache_dir
+        self.regenerate = config_dict.get('regenerate') or True
+        self.cache_data = config_dict.get('cache_data') or True
+
+
+
+
+
+
+
+
+        
 
 
 @dataclass
-class ModelConfig:
+class ModelConfig(ConfigClass):
     base_model: str
     ModelClass: str
     TokenizerClass: str
@@ -77,11 +93,11 @@ class ModelConfig:
 
 
 @dataclass
-class LoggingConfig:
+class LoggingConfig(ConfigClass):
     name: str
 
 @dataclass
-class TrainingConfig:
+class TrainingConfig(ConfigClass):
     executor_class: str
     epochs: int
     batch_size: int
@@ -90,14 +106,14 @@ class TrainingConfig:
     additional: Dict[str, any]
 
 @dataclass
-class ValidationConfig:
+class ValidationConfig(ConfigClass):
     batch_size: int
     step_size: int
     break_interval: int
     additional: Dict[str, any]
 
 @dataclass
-class TestingConfig:
+class TestingConfig(ConfigClass):
     evaluation_name: str
     load_epoch: int
     load_model_path: str
