@@ -26,11 +26,12 @@ def single_feature_row_transform(row_transform_fn):
     """
     Decorator: transforms a single feature row by row
     """
-    def _transform_wrapper(in_features, *args, **kwargs):
+    def _transform_wrapper(in_features, out_features, *args, **kwargs):
         transformed_data = None
         for feat_name, feat_data in in_features.items():
             transformed_data = [row_transform_fn(row, *args, **kwargs) for row in feat_data]
-        return {feat_name: transformed_data}
+        col_name = out_features[0] if len(out_features) else list(in_features.keys())[0]
+        return {col_name: transformed_data}
     return _transform_wrapper
 
 def ComposeTransforms(transform_fns):
@@ -56,16 +57,14 @@ def ColorJitterTransform(
 @register_to(DataTransform_Registry)
 def CopyFields( 
     in_features: dict={}, 
-    mapping: dict={},
+    out_features: dict=[]
     ) -> EasyDict:
     '''
     Copy fields directly. If mapping is not specified, the original names will be used
     '''
     output = EasyDict()
-    for feat_name, feat_data in in_features.items():
-        out_field = feat_name
-        if feat_name in mapping:
-            out_field = mapping[feat_name]
+    for i, (feat_name, feat_data) in enumerate(in_features.items()):
+        out_field = out_features[i]
         output[out_field] = copy.deepcopy(feat_data) # ensure we store data, not reference to data
     return output
 

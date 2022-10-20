@@ -116,14 +116,19 @@ class DataPipeline:
         for split in ['train', 'test', 'valid']:
             outputs = None
             pbar = tqdm(self.transforms[split])
+            outputs = {}
             for transform in pbar:
                 pbar.set_description(f"{split}-{transform.name}")
                 transform_fn = transform.name
                 use_feature_names = transform.use_features
-                outputs = DataTransform_Registry[transform_fn](
+                out_feature_names = transform.out_features
+                outputs.update(
+                    DataTransform_Registry[transform_fn](
                     in_features={fname: self.data[split][fname] for fname in use_feature_names},
-                    **transform.kwargs,
+                    out_features=out_feature_names,
+                    **transform.kwargs)
                 )
+                pass
                 #NOTE: in-place transformation: self.data is altered. 
                 # out_fields = set()
                 #TODO: implement '+' operation

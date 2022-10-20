@@ -39,7 +39,7 @@ local default_dataloader_args = {
 
 local example_data_pipeline = {
   name: 'LoadBeansDataset',
-  regenerate: false,
+  regenerate: true,
   dataloader_args: {
     train: default_dataloader_args {
       shuffle: true // override
@@ -65,33 +65,23 @@ local example_data_pipeline = {
     {
       name: 'ColorJitterTransform',
       use_features: ['image'],
-      kwargs: {},
       out_features: ['transformed_image'], // override col1; if 'col1+', result will be appended to col1
       batched: 0,
+      kwargs: {},
     },
     {
       name: 'CopyFields',
       use_features: ['image', 'labels'],
-      kwargs: {
-        mapping: {
-          image: 'image',
-          labels: 'labels',
-        },
-      },
       out_features: ['image', 'labels'],
+      kwargs: {},
     },
   ],
   local test_transforms = [
     {
       name: 'CopyFields',
       use_features: ['image', 'labels'],
-      kwargs: {
-        mapping: {
-          image: 'image',
-          labels: 'labels',
-        },
-      },
       out_features: ['image', 'labels'],
+      kwargs: {},
     },
   ],
   // local test_transforms = [
