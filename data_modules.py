@@ -38,32 +38,24 @@ from feature_loaders import *
 class MapDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        data: Dict[str, any],
-        use_features: List[str] = [],
+        in_data: Dict[str, any],
+        use_features: List[str] = [], # use all by default
         ):
         self.data = EasyDict()
-        self.use_features = use_features
+        self.use_features = use_features if len(use_features) else list(in_data.keys()) # by default, use all features
         self.col_len = 0 
-        if use_features == []:
-            for feature, col in data.items():
-                self.data[feature] = col
-                if self.col_len == 0:
-                    self.col_len = len(col)
-                else:
-                    assert self.col_len == len(col), "all features (columns) must be of the same length"
-        else: # use_features is a list
-            for feature in self.use_features:
-                self.data[feature] = data.feature
-                if self.col_len == 0:
-                    self.col_len = len(self.data[feature])
-                else:
-                    assert self.col_len == len(self.data[feature]), "all features (columns) must be of the same length"
-    
+        for col_name in self.use_features:
+            self.data[col_name] = in_data[col_name]
+            if self.col_len == 0:
+                self.col_len = len(self.data[col_name])
+            else:
+                assert self.col_len == len(self.data[col_name]), "all features (columns) must be of the same length"
+
     def __len__(self):
         return self.col_len
 
     def __getitem__(self, idx):
-        return {feature: self.data.feature for feature in self.use_features}
+        return {feature: self.data[feature][idx] for feature in self.use_features}
 
 
 def _select_cols(in_data, colnames):
@@ -71,6 +63,14 @@ def _select_cols(in_data, colnames):
     for col in colnames:
         out[col] = in_data[col]
     return out
+
+def _prepare_to_tensor(arr):
+    if isinstance(arr, list) and not isinstance(arr[0], torch.Tensor):
+        return torch.Tensor(arr)
+    elif isinstance(arr, list) and isinstance(arr[0], torch.Tensor):
+        return torch.stack(arr)
+    else:
+        raise NotImplementedError("Fail to prepare to tensor to collate samples")
 
 class DataPipeline:
     def __init__(
@@ -88,6 +88,7 @@ class DataPipeline:
         self.dataloader_args = self.config.dataloader_args
         self.in_features = self.config.in_features
         self.transforms = EasyDict(self.config.transforms)
+        self.dataloaders_use_features = self.config.dataloaders_use_features
 
         self.data = defaultdict(EasyDict) # underlying storage class must be enumerable, but otherwise no assumptions
         self.output_data = defaultdict(EasyDict) # container for output data after transformation
@@ -148,11 +149,11 @@ class DataPipeline:
             # only select the columns specified in `out_fields`
             self.output_data[split] = _select_cols(outputs, list(out_fields))
             # self.output_data[split] = outputs
-        self._convert_out_data_to_datasets()
+        self._convert_out_data_to_datasets(self.dataloaders_use_features)
         
-    def _convert_out_data_to_datasets(self): # make MapDataset with split_name as key
+    def _convert_out_data_to_datasets(self, dataloaders_use_features): # make MapDataset with split_name as key
         for split in ['train', 'test', 'valid']:
-            self.result_datasets[split] = MapDataset(self.output_data[split], use_features=[]) # all
+            self.result_datasets[split] = MapDataset(self.output_data[split], use_features=dataloaders_use_features[split]) # all
     
     def run(self):
         """
@@ -166,27 +167,43 @@ class DataPipeline:
                 cache_data_to_disk(self.output_data, self.name, self.cache_dir)
         else:
             self.output_data = load_data_from_disk(self.name, self.cache_dir)
-        self._convert_out_data_to_datasets()
+        self._convert_out_data_to_datasets(self.dataloaders_use_features)
         return self.output_data
-            
     
+    def make_collate_fn(self, split):
+        batched_data = {feat_name: [] for feat_name in self.dataloaders_use_features[split]}
+        def _collate_fn(examples):
+            for example in examples:
+                for feat_name, feat_data in example.items():
+                    batched_data[feat_name].append(feat_data)
+            for feat_name in batched_data:
+                batched_data[feat_name] = _prepare_to_tensor(batched_data[feat_name])
+            return batched_data
+        return _collate_fn
+        
     def train_dataloader(self):
+        collate_fn = self.make_collate_fn('train')
         return torch.utils.data.DataLoader(
             self.result_datasets['train'],
             **self.config.dataloader_args['train'],
+            collate_fn=collate_fn,
         )
 
 
     def test_dataloader(self):
+        collate_fn = self.make_collate_fn('test')
         return torch.utils.data.DataLoader(
             self.result_datasets['test'],
             **self.config.dataloader_args['test'],
+            collate_fn=collate_fn,
         )
 
     def valid_dataloader(self):
+        collate_fn = self.make_collate_fn('valid')
         return torch.utils.data.DataLoader(
             self.result_datasets['valid'],
             **self.config.dataloader_args['valid'],
+            collate_fn=collate_fn
         )
     
 

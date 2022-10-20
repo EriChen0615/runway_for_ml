@@ -31,4 +31,6 @@ def prepare_data():
 if __name__ == '__main__':
     initialize_config(CONFIG_FILE)
     processed_data = prepare_data()
+    train_dataloader = processed_data.train_dataloader()
+    print(next(iter(train_dataloader)))
     pass

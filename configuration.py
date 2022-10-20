@@ -58,6 +58,7 @@ class DataPipelineConfig(ConfigClass):
     dataloader_args: Dict[str, Dict[str, any]] = None # [split - [arg_name - arg_value]]
     cache_dir: str = ""
     regenerate: bool = True
+    dataloaders_use_features: Dict[str, List[str]] = None
 
     def from_config(self, config: Dict[str, any], meta_config: Dict[str, any]):
         config_dict = config.data_pipeline
@@ -68,6 +69,7 @@ class DataPipelineConfig(ConfigClass):
         self.cache_dir = config_dict['cache_dir'] if 'cache_dir' in config_dict else meta_config.default_cache_dir
         self.regenerate = config_dict.get('regenerate', True)
         self.cache_data = config_dict.get('cache_data', True)
+        self.dataloaders_use_features = config_dict.get('dataloaders_use_features')
 
 
 # @dataclass

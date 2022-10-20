@@ -32,7 +32,7 @@ local example_feature_loader = {
 // };
 
 local default_dataloader_args = {
-  batch_size: 1,
+  batch_size: 4,
   shuffle: false,
   sampler: null,
 }; // see https://pytorch.org/docs/stable/data.html for arguments
@@ -72,7 +72,7 @@ local example_data_pipeline = {
     {
       name: 'ToTensorTransform',
       use_features: ['transformed_image'],
-      out_features: ['transformed_image'],
+      out_features: ['tensor_image'],
       kwargs: {},
     },
     {
@@ -90,20 +90,16 @@ local example_data_pipeline = {
       kwargs: {},
     },
   ],
-  // local test_transforms = [
-  //   {
-  //     name: "Transform function name",
-  //     use_features: [],
-  //     kwargs: {},
-  //     out_features: ["col2"],
-  //     batched: 1,
-  //   },
-  // ],
   local valid_transforms = test_transforms,
   transforms: {
     train: train_transforms,
     test: test_transforms,
     valid: valid_transforms,
+  },
+  dataloaders_use_features: {
+    train: ['tensor_image', 'labels'],
+    test: ['image', 'labels'],
+    valid: ['image', 'labels'],
   },
 };
 
