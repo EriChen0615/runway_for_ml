@@ -4,6 +4,8 @@ from transformers import AutoTokenizer
 import copy
 import pandas as pd
 from torchvision.transforms import ColorJitter, ToTensor
+from typing import Dict
+
 
 def multi_feature_row_transform(row_transform_fn):
     """
@@ -24,11 +26,9 @@ def single_feature_row_transform(row_transform_fn):
     """
     Decorator: transforms a single feature row by row
     """
-    func_name = row_transform_fn.__name__
-    DataTransform_Registry[func_name] = 
     def _transform_wrapper(in_features, *args, **kwargs):
         transformed_data = None
-        for feat_name, feat_data in in_features.item():
+        for feat_name, feat_data in in_features.items():
             transformed_data = [row_transform_fn(row, *args, **kwargs) for row in feat_data]
         return {feat_name: transformed_data}
     return _transform_wrapper
@@ -55,8 +55,8 @@ def ColorJitterTransform(
 
 @register_to(DataTransform_Registry)
 def CopyFields( 
-    in_features=None, 
-    mapping=None
+    in_features: dict={}, 
+    mapping: dict={},
     ) -> EasyDict:
     '''
     Copy fields directly. If mapping is not specified, the original names will be used
@@ -91,8 +91,8 @@ def TokenizeField(
         
 @register_to(DataTransform_Registry)
 def MergeFields(
-    in_features: dict={},
-    mapping: dict[str, str]={"in1,in2,in3":"out"}, # input_fields separated by , in the order of merging
+    in_features: Dict={},
+    mapping: Dict[str, str]={"in1,in2,in3":"out"}, # input_fields separated by , in the order of merging
     sep_token: str=" ",
     ) -> EasyDict:
     output = EasyDict()

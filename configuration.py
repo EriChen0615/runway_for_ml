@@ -66,8 +66,8 @@ class DataPipelineConfig(ConfigClass):
         self.transforms = EasyDict(config_dict['transforms'])
         self.dataloader_args = EasyDict(config_dict['dataloader_args'])
         self.cache_dir = config_dict['cache_dir'] if 'cache_dir' in config_dict else meta_config.default_cache_dir
-        self.regenerate = config_dict.get('regenerate') or True
-        self.cache_data = config_dict.get('cache_data') or True
+        self.regenerate = config_dict.get('regenerate', True)
+        self.cache_data = config_dict.get('cache_data', True)
 
 
 # @dataclass

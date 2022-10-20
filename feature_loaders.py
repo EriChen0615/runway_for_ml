@@ -1,21 +1,24 @@
+"""
+This is the file for feature loaders. The feature loader must accept `use_cache` and `split` arguments
+"""
 from data_modules import register_to, FeatureLoader_Registry, DataTransform_Registry
 from datasets import load_dataset
 from easydict import EasyDict
 from collections import defaultdict
 from datasets import load_dataset, Image
 
-def LoadHFDataset(dataset_name, fields=[]):
-    hf_ds = load_dataset(dataset_name)
+def LoadHFDataset(dataset_name, split='train', fields=[]):
+    if split == 'valid':
+        split = 'validation'
+    hf_ds = load_dataset(dataset_name, split=split)
     ds = defaultdict(EasyDict)
-    for split in ['train', 'test', 'validation']:
-        if len(fields) == 0:
-            ds[split] = hf_ds[split]
-        else:
-            all_columns = set(hf_ds[split].features.keys())
-            keep_fields = set(fields)
-            remove_fields = all_columns - keep_fields
-            ds[split] = hf_ds[split].remove_columns(list(remove_fields))
-    ds['valid'] = ds.pop('validation')
+    if len(fields) == 0:
+        ds = hf_ds
+    else:
+        all_columns = set(hf_ds.features.keys())
+        keep_fields = set(fields)
+        remove_fields = all_columns - keep_fields
+        ds = hf_ds.remove_columns(list(remove_fields))
     return ds
 
 @register_to(FeatureLoader_Registry)
@@ -30,8 +33,8 @@ def LoadSGDWithSchema():
     return dataset
 
 @register_to(FeatureLoader_Registry)
-def LoadBeansDataset():
-    return LoadHFDataset("beans", ['image', 'labels'])
+def LoadBeansDataset(use_cache=True, split='train'):
+    return LoadHFDataset("beans", fields=['image', 'labels'], split=split)
     # beans_ds = load_dataset("beans")
     # ds = defaultdict(EasyDict)
     # for split in ['train', 'test', 'validation']:

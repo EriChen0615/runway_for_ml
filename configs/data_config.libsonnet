@@ -13,7 +13,7 @@
 
 local example_feature_loader = {
   name: "LoadBeansDataset",
-  // kwargs: {}, // arguments to feature_loader init
+  kwargs: {}, // arguments to feature_loader init
   cache_data: true,
   use_cache: true,
 };
@@ -63,30 +63,47 @@ local example_data_pipeline = {
   // define transform for each split
   local train_transforms = [
     {
-      type: "Transform function name 1",
-      use_features: [],
+      name: 'ColorJitterTransform',
+      use_features: ['image'],
       kwargs: {},
-      out_features: ["col1", "col2"], // override col1; if 'col1+', result will be appended to col1
+      out_features: ['transformed_image'], // override col1; if 'col1+', result will be appended to col1
       batched: 0,
     },
     {
-      type: "Transform function name 2",
-      use_features: ["col2"], // out_feature in previous transform is available
-      kwargs: {},
-      out_features: ["col2+"], // override col1; if 'col1+', result will be appended to col1
-      batched: 1,
+      name: 'CopyFields',
+      use_features: ['image', 'labels'],
+      kwargs: {
+        mapping: {
+          image: 'image',
+          labels: 'labels',
+        },
+      },
+      out_features: ['image', 'labels'],
     },
   ],
   local test_transforms = [
     {
-      name: "Transform function name",
-      use_features: [],
-      kwargs: {},
-      out_features: ["col2"],
-      batched: 1,
+      name: 'CopyFields',
+      use_features: ['image', 'labels'],
+      kwargs: {
+        mapping: {
+          image: 'image',
+          labels: 'labels',
+        },
+      },
+      out_features: ['image', 'labels'],
     },
   ],
-  local valid_transforms = train_transforms,
+  // local test_transforms = [
+  //   {
+  //     name: "Transform function name",
+  //     use_features: [],
+  //     kwargs: {},
+  //     out_features: ["col2"],
+  //     batched: 1,
+  //   },
+  // ],
+  local valid_transforms = test_transforms,
   transforms: {
     train: train_transforms,
     test: test_transforms,

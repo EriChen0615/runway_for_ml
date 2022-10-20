@@ -81,7 +81,7 @@ def cache_data_to_disk(
     cache data_to_dist to disk at location `dir_path/data_name`
     """
     if not os.path.exists(dir_path):
-        create_dirs[dir_path]
+        create_dirs([dir_path])
     
     data_file_name = os.path.join(dir_path, f"{data_name}.{save_format}")
     
@@ -90,12 +90,20 @@ def cache_data_to_disk(
     else:
         raise NotImplementedError(f"Saving data to disk with {save_format} is not implemented!")
 
+def make_cache_file_name(
+    data_name: str,
+    dir_path: str,
+    save_format: str = 'pkl',
+    ):
+    return os.path.join(dir_path, f"{data_name}.{save_format}")
+
+
 def load_data_from_disk(
     data_name: str,
     dir_path: str,
     save_format: str = 'pkl',
     ):
-    data_file_name = os.path.join(dir_path, f"{data_name}.{save_format}")
+    data_file_name = make_cache_file_name(data_name, dir_path=dir_path, save_format=save_format)
     if os.path.exists(data_file_name):
         if save_format == 'pkl':
             loaded_data = load_pickle_data(data_file_name)

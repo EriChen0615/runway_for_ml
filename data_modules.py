@@ -4,11 +4,12 @@ from collections import defaultdict
 from configuration import DataPipelineConfig
 import torch
 from typing import Union, List, Dict, Optional
-from utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists
+from utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists, make_cache_file_name
 import os 
+from tqdm import tqdm
 
 FeatureLoader_Registry = EasyDict() # registry for feature loaders
-DataTransform_Registry = EasyDict() # registry for data transforms
+DataTransform_Registry = EasyDict() # registry for feature loaders
 
 def register_to(registry, name=None):
     def _register_func(func):
@@ -18,6 +19,9 @@ def register_to(registry, name=None):
             return func(*args, **kwargs)
         return _func_wrapper
     return _register_func
+
+from data_transforms import *
+from feature_loaders import *
 
 # def cache_feature_loader():
 #     def _loader_func(load_func):
@@ -71,16 +75,16 @@ class DataPipeline:
 
         self.name = self.config.name
         self.cache_dir = self.config.cache_dir
-        self.cache_file_name = os.path.join(self.cache_dir, self.name)
-        self.regenerate = self.config.get('regenerate') or True
-        self.cache_data = self.config.get('cache_data') or True
+        self.cache_file_name = make_cache_file_name(self.name, self.cache_dir)
+        self.regenerate = self.config.regenerate
+        self.cache_data = self.config.cache_data
 
         self.dataloader_args = self.config.dataloader_args
         self.in_features = self.config.in_features
         self.transforms = EasyDict(self.config.transforms)
 
         self.data = defaultdict(EasyDict) # underlying storage class must be enumerable, but otherwise no assumptions
-        self.out_data = defaultdict(EasyDict) # container for output data after transformation
+        self.output_data = defaultdict(EasyDict) # container for output data after transformation
         self.result_datasets = EasyDict()
     
     def _assign_to_col(self, split, colname, data):
@@ -91,9 +95,9 @@ class DataPipeline:
             row += data[i] # row data structure must support += 
         
     def _select_cols(self, split, colnames):
-        out = EasyDict
+        out = EasyDict()
         for col in colnames:
-            out = self.data[split].col
+            out = self.data[split][col]
         return out
         
     def load_features(self):
@@ -104,35 +108,40 @@ class DataPipeline:
             splits = in_feature.splits
             use_cache = in_feature.use_cache
             for split in splits:
-                loaded_data = FeatureLoader_Registry.fl_name(**fl_kwargs, use_cache=use_cache, split=split)
+                loaded_data = FeatureLoader_Registry[fl_name](**fl_kwargs, use_cache=use_cache, split=split)
                 for feat_name in feature_names:
-                    self.data[split].feat_name = loaded_data[split][feat_name]
+                    self.data[split][feat_name] = loaded_data[feat_name]
     
     def apply_transforms(self):
         for split in ['train', 'test', 'valid']:
-            for transform in self.transforms.split:
+            outputs = None
+            pbar = tqdm(self.transforms[split])
+            for transform in pbar:
+                pbar.set_description(f"{split}-{transform.name}")
                 transform_fn = transform.name
                 use_feature_names = transform.use_features
-                outputs = DataTransform_Registry.transform_fn(
+                outputs = DataTransform_Registry[transform_fn](
                     in_features={fname: self.data[split][fname] for fname in use_feature_names},
                     **transform.kwargs,
                 )
-                out_fields = set()
-                # note: in-place transformation: self.data is altered. 
-                for colname, output_data in outputs.items():
-                    if colname[-1] == '+':
-                        self._append_to_col(split, colname, output_data)
-                        out_fields.add(colname[:-1])
-                    else:
-                        self._assign_to_col(split, colname, output_data)
-                        out_fields.add(colname)
+                #NOTE: in-place transformation: self.data is altered. 
+                # out_fields = set()
+                #TODO: implement '+' operation
+                # for colname, output_data in outputs.items():
+                #     if colname[-1] == '+':
+                #         self._append_to_col(split, colname, output_data)
+                #         out_fields.add(colname[:-1])
+                #     else:
+                #         self._assign_to_col(split, colname, output_data)
+                #         out_fields.add(colname)
             # only select the columns specified in `out_fields`
-            self.out_data[split] = self._select_cols(split, list(out_fields))
-            self._convert_out_data_to_datasets()
+            # self.output_data[split] = self._select_cols(split, list(out_fields))
+            self.output_data[split] = outputs
+        self._convert_out_data_to_datasets()
         
     def _convert_out_data_to_datasets(self): # make MapDataset with split_name as key
         for split in ['train', 'test', 'valid']:
-            self.result_datasets[split] = MapDataset(self.out_data[split], use_features=[]) # all
+            self.result_datasets[split] = MapDataset(self.output_data[split], use_features=[]) # all
     
     def run(self):
         """
@@ -140,13 +149,14 @@ class DataPipeline:
         Return self.out_data
         """
         if self.regenerate or not cache_file_exists(self.cache_file_name):
+            self.load_features()
             self.apply_transforms()
             if self.cache_data:
-                cache_data_to_disk(self.out_data, self.cache_file_name)
+                cache_data_to_disk(self.output_data, self.name, self.cache_dir)
         else:
-            self.out_data = load_data_from_disk(self.cache_file_name)
-            self._convert_out_data_to_datasets()
-        return self.out_data
+            self.output_data = load_data_from_disk(self.name, self.cache_dir)
+        self._convert_out_data_to_datasets()
+        return self.output_data
             
     
     def train_dataloader(self):

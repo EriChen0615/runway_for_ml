@@ -2,11 +2,11 @@ from data_modules import DataPipeline
 from configuration import (
     MetaConfig, 
     DataPipelineConfig, 
-    ModelConfig, 
-    LoggingConfig, 
-    TrainingConfig, 
-    ValidationConfig, 
-    TestingConfig
+    # ModelConfig, 
+    # LoggingConfig, 
+    # TrainingConfig, 
+    # ValidationConfig, 
+    # TestingConfig
 )
 import os
 from utils.config_system import read_config
@@ -25,9 +25,10 @@ def initialize_config(config_file):
 def prepare_data():
     data_pipeline = DataPipeline(dp_config)
     processed_data = data_pipeline.run()
-    pass
+    return data_pipeline
 
 
 if __name__ == '__main__':
-    # initialize_config(CONFIG_FILE)
-    
+    initialize_config(CONFIG_FILE)
+    processed_data = prepare_data()
+    pass
