@@ -39,7 +39,7 @@ local default_dataloader_args = {
 
 local example_data_pipeline = {
   name: 'LoadBeansDataset',
-  regenerate: true,
+  regenerate: false,
   dataloader_args: {
     train: default_dataloader_args {
       shuffle: true // override
@@ -67,6 +67,12 @@ local example_data_pipeline = {
       use_features: ['image'],
       out_features: ['transformed_image'], // override col1; if 'col1+', result will be appended to col1
       batched: 0,
+      kwargs: {},
+    },
+    {
+      name: 'ToTensorTransform',
+      use_features: ['transformed_image'],
+      out_features: ['transformed_image'],
       kwargs: {},
     },
     {

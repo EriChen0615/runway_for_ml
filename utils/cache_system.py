@@ -87,6 +87,7 @@ def cache_data_to_disk(
     
     if save_format == 'pkl':
         save_pickle_data(data_to_save, data_file_name)
+        print(f"Data saved to {data_file_name}")
     else:
         raise NotImplementedError(f"Saving data to disk with {save_format} is not implemented!")
 
@@ -107,6 +108,7 @@ def load_data_from_disk(
     if os.path.exists(data_file_name):
         if save_format == 'pkl':
             loaded_data = load_pickle_data(data_file_name)
+            print(f"Data loaded from {data_file_name}")
             return loaded_data
         else:
             raise NotImplementedError(f".{save_format} loading is not implemented in cache system!")
@@ -124,7 +126,7 @@ def save_pickle_data(data_to_save, data_file_name):
 def load_pickle_data(data_file_name):
     with open(data_file_name, 'rb') as f:
         load_pickle_data = pickle.load(f)['cache']
-        return EasyDict(load_pickle_data)
+    return EasyDict(load_pickle_data)
 
 
 

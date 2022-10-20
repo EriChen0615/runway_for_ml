@@ -66,6 +66,12 @@ class MapDataset(torch.utils.data.Dataset):
         return {feature: self.data.feature for feature in self.use_features}
 
 
+def _select_cols(in_data, colnames):
+    out = EasyDict()
+    for col in colnames:
+        out[col] = in_data[col]
+    return out
+
 class DataPipeline:
     def __init__(
         self, 
@@ -87,19 +93,21 @@ class DataPipeline:
         self.output_data = defaultdict(EasyDict) # container for output data after transformation
         self.result_datasets = EasyDict()
     
-    def _assign_to_col(self, split, colname, data):
-        self.data[split].colname = data
+    def _assign_to_col(self, split, colname, in_data, out_data):
+        # self.data[split].colname = data
+        out_data[split][colname] = in_data
+
     
-    def _append_to_col(self, split, colname, data):
-        for i, row in enumerate(self.data[split].colname):
-            row += data[i] # row data structure must support += 
+    def _append_to_col(self, split, colname, in_data, out_data):
+        for i, row in enumerate(out_data[split].colname):
+            row += in_data[i] # row data structure must support += 
         
-    def _select_cols(self, split, colnames):
-        out = EasyDict()
-        for col in colnames:
-            out = self.data[split][col]
-        return out
-        
+    # def _select_cols(self, split, colnames):
+    #     out = EasyDict()
+    #     for col in colnames:
+    #         out = self.data[split][col]
+    #     return out
+
     def load_features(self):
         for in_feature in self.in_features:
             feature_names = in_feature.feature_names
@@ -114,9 +122,8 @@ class DataPipeline:
     
     def apply_transforms(self):
         for split in ['train', 'test', 'valid']:
-            outputs = None
-            pbar = tqdm(self.transforms[split])
-            outputs = {}
+            pbar = tqdm(self.transforms[split], unit='op')
+            outputs = self.data[split]
             for transform in pbar:
                 pbar.set_description(f"{split}-{transform.name}")
                 transform_fn = transform.name
@@ -124,24 +131,23 @@ class DataPipeline:
                 out_feature_names = transform.out_features
                 outputs.update(
                     DataTransform_Registry[transform_fn](
-                    in_features={fname: self.data[split][fname] for fname in use_feature_names},
+                    in_features={fname: outputs[fname] for fname in use_feature_names},
                     out_features=out_feature_names,
                     **transform.kwargs)
                 )
                 pass
                 #NOTE: in-place transformation: self.data is altered. 
-                # out_fields = set()
-                #TODO: implement '+' operation
+                out_fields = set(outputs.keys())
                 # for colname, output_data in outputs.items():
                 #     if colname[-1] == '+':
-                #         self._append_to_col(split, colname, output_data)
+                #         # self._append_to_col(split, colname, output_data)
                 #         out_fields.add(colname[:-1])
                 #     else:
-                #         self._assign_to_col(split, colname, output_data)
+                #         # self._assign_to_col(split, colname, output_data)
                 #         out_fields.add(colname)
             # only select the columns specified in `out_fields`
-            # self.output_data[split] = self._select_cols(split, list(out_fields))
-            self.output_data[split] = outputs
+            self.output_data[split] = _select_cols(outputs, list(out_fields))
+            # self.output_data[split] = outputs
         self._convert_out_data_to_datasets()
         
     def _convert_out_data_to_datasets(self): # make MapDataset with split_name as key

@@ -4,6 +4,7 @@ from transformers import AutoTokenizer
 import copy
 import pandas as pd
 from torchvision.transforms import ColorJitter, ToTensor
+from tqdm import tqdm
 from typing import Dict
 
 
@@ -50,6 +51,15 @@ def ColorJitterTransform(
     hue=0.5,
     ):
     func = ColorJitter(brightness=brightness, hue=hue)
+    transformed_image = func(image)
+    return transformed_image
+
+@register_to(DataTransform_Registry, name="ToTensorTransform")
+@single_feature_row_transform
+def ToTensorTransform(
+    image,
+    ):
+    func = ToTensor()
     transformed_image = func(image)
     return transformed_image
 
