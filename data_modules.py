@@ -7,19 +7,7 @@ from typing import Union, List, Dict, Optional
 from utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists, make_cache_file_name
 import os 
 from tqdm import tqdm
-
-FeatureLoader_Registry = EasyDict() # registry for feature loaders
-DataTransform_Registry = EasyDict() # registry for feature loaders
-
-def register_to(registry, name=None):
-    def _register_func(func):
-        fn = name or func.__name__
-        registry[fn] = func
-        def _func_wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
-        return _func_wrapper
-    return _register_func
-
+from global_variables import register_to, DataTransform_Registry, FeatureLoader_Registry
 from data_transforms import *
 from feature_loaders import *
 
@@ -65,6 +53,8 @@ def _select_cols(in_data, colnames):
     return out
 
 def _prepare_to_tensor(arr):
+    if isinstance(arr, torch.Tensor):
+        pass # already a tensor
     if isinstance(arr, list) and not isinstance(arr[0], torch.Tensor):
         return torch.Tensor(arr)
     elif isinstance(arr, list) and isinstance(arr[0], torch.Tensor):
@@ -91,9 +81,19 @@ class DataPipeline:
         self.dataloaders_use_features = self.config.dataloaders_use_features
 
         self.data = defaultdict(EasyDict) # underlying storage class must be enumerable, but otherwise no assumptions
+        self.output_ok_flag = False
         self.output_data = defaultdict(EasyDict) # container for output data after transformation
-        self.result_datasets = EasyDict()
-    
+        self.result_datasets = None
+
+        # Datapipeline also registered as a feature loader to compose more complex pipelines
+        self.this_loader_name = f"Load{self.name}" 
+        assert self.this_loader_name not in FeatureLoader_Registry, f"Identical Feature Loaders names detected, '{self.this_loader_name}' is already used!"
+        FeatureLoader_Registry[self.this_loader_name] = self._LoadThisDataPipeline # register corresponding FeatureLoader
+
+    def _LoadThisDataPipeline(self, split='train'):
+            output_data = self.run()
+            return output_data[split]
+
     def _assign_to_col(self, split, colname, in_data, out_data):
         # self.data[split].colname = data
         out_data[split][colname] = in_data
@@ -117,7 +117,7 @@ class DataPipeline:
             splits = in_feature.splits
             use_cache = in_feature.use_cache
             for split in splits:
-                loaded_data = FeatureLoader_Registry[fl_name](**fl_kwargs, use_cache=use_cache, split=split)
+                loaded_data = FeatureLoader_Registry[fl_name](**fl_kwargs, split=split)
                 for feat_name in feature_names:
                     self.data[split][feat_name] = loaded_data[feat_name]
     
@@ -126,7 +126,7 @@ class DataPipeline:
             pbar = tqdm(self.transforms[split], unit='op')
             outputs = self.data[split]
             for transform in pbar:
-                pbar.set_description(f"{split}-{transform.name}")
+                pbar.set_description(f"{self.name}-{split}-{transform.name}")
                 transform_fn = transform.name
                 use_feature_names = transform.use_features
                 out_feature_names = transform.out_features
@@ -148,18 +148,23 @@ class DataPipeline:
                 #         out_fields.add(colname)
             # only select the columns specified in `out_fields`
             self.output_data[split] = _select_cols(outputs, list(out_fields))
+        self.output_ok_flag = True
             # self.output_data[split] = outputs
-        self._convert_out_data_to_datasets(self.dataloaders_use_features)
+        # self._convert_out_data_to_datasets(self.dataloaders_use_features)
         
     def _convert_out_data_to_datasets(self, dataloaders_use_features): # make MapDataset with split_name as key
+        self.result_datasets = EasyDict()
         for split in ['train', 'test', 'valid']:
             self.result_datasets[split] = MapDataset(self.output_data[split], use_features=dataloaders_use_features[split]) # all
     
     def run(self):
         """
         Run the data pipeline. Load cache data or apply transform. 
-        Return self.out_data
+        If in_data is not None, use it as input data for transforms
+        Return self.out_data & self.result_datasets
         """
+        if self.output_ok_flag:
+            return self.output_data
         if self.regenerate or not cache_file_exists(self.cache_file_name):
             self.load_features()
             self.apply_transforms()
@@ -167,7 +172,7 @@ class DataPipeline:
                 cache_data_to_disk(self.output_data, self.name, self.cache_dir)
         else:
             self.output_data = load_data_from_disk(self.name, self.cache_dir)
-        self._convert_out_data_to_datasets(self.dataloaders_use_features)
+            self.output_ok_flag = True
         return self.output_data
     
     def make_collate_fn(self, split):
@@ -182,6 +187,8 @@ class DataPipeline:
         return _collate_fn
         
     def train_dataloader(self):
+        if self.result_datasets is None:
+            self._convert_out_data_to_datasets(self.dataloaders_use_features)
         collate_fn = self.make_collate_fn('train')
         return torch.utils.data.DataLoader(
             self.result_datasets['train'],
@@ -191,6 +198,8 @@ class DataPipeline:
 
 
     def test_dataloader(self):
+        if self.result_datasets is None:
+            self._convert_out_data_to_datasets(self.dataloaders_use_features)
         collate_fn = self.make_collate_fn('test')
         return torch.utils.data.DataLoader(
             self.result_datasets['test'],
@@ -199,6 +208,8 @@ class DataPipeline:
         )
 
     def valid_dataloader(self):
+        if self.result_datasets is None:
+            self._convert_out_data_to_datasets(self.dataloaders_use_features)
         collate_fn = self.make_collate_fn('valid')
         return torch.utils.data.DataLoader(
             self.result_datasets['valid'],

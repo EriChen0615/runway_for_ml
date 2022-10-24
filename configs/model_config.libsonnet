@@ -22,6 +22,18 @@ local warmup_steps = 0;
 
 // local seed=2021; // override as appropriate
 
+local model_config = {
+  model_name: "default_model_name",
+  model_lib: "HF",
+  ModelClass: "HFModelClass",
+  ModelConfigClass: "HFModelConfigClass",
+  model_config_args: {},
+  needs_tokenizer: false,
+  TokenizerClass: "TokenizerClassName",
+  tokenizer_args: {},
+  special_tokens: {},
+},
+
 local override = {
   "platform_type": "pytorch",
   "ignore_pretrained_weights": [],
