@@ -22,12 +22,11 @@ def initialize_config(config_file):
     config = read_config(config_file)
     meta_config.from_config(config)  
     dp_config.from_config(config, meta_config)
-    next_dp_config.from_config(config, meta_config, key_name="next_data_pipeline")
+    # next_dp_config.from_config(config, meta_config, key_name="next_data_pipeline")
 
 def prepare_data():
     data_pipeline = DataPipeline(dp_config)
-    next_data_pipeline = DataPipeline(next_dp_config)
-    processed_data = next_data_pipeline.run()
+    processed_data = data_pipeline.run()
     return processed_data
 
 

@@ -3,7 +3,7 @@ import pickle
 from easydict import EasyDict
 import logging
 logger = logging.getLogger(__name__)
-from utils.dirs import create_dirs
+from .dirs import create_dirs
 from typing import Dict
 
 

@@ -1,5 +1,5 @@
 from easydict import EasyDict
-from global_variables import register_to, DataTransform_Registry
+from .global_variables import register_to, DataTransform_Registry
 from transformers import AutoTokenizer
 import copy
 import pandas as pd

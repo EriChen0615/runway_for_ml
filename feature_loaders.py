@@ -1,7 +1,7 @@
 """
 This is the file for feature loaders. The feature loader must accept `use_cache` and `split` arguments
 """
-from global_variables import register_to, FeatureLoader_Registry
+from .global_variables import register_to, FeatureLoader_Registry
 from datasets import load_dataset
 from easydict import EasyDict
 from collections import defaultdict

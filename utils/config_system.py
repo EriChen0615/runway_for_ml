@@ -19,7 +19,7 @@ import time
 from easydict import EasyDict
 from pprint import pprint
 import time
-from utils.dirs import create_dirs
+from .dirs import create_dirs
 from pathlib import Path
 
 def get_config_from_json(json_file):
