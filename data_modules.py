@@ -53,6 +53,7 @@ def _select_cols(in_data, colnames):
     return out
 
 def _prepare_to_tensor(arr):
+    #TODO: Make configurable!
     if isinstance(arr, torch.Tensor):
         pass # already a tensor
     if isinstance(arr, list) and not isinstance(arr[0], torch.Tensor):
@@ -177,12 +178,12 @@ class DataPipeline:
     
     def make_collate_fn(self, split):
         batched_data = {feat_name: [] for feat_name in self.dataloaders_use_features[split]}
-        def _collate_fn(examples):
+        def _collate_fn(examples): # Let user do it.
             for example in examples:
                 for feat_name, feat_data in example.items():
                     batched_data[feat_name].append(feat_data)
             for feat_name in batched_data:
-                batched_data[feat_name] = _prepare_to_tensor(batched_data[feat_name])
+                batched_data[feat_name] = _prepare_to_tensor(batched_data[feat_name]) #TODO: leave this to user
             return batched_data
         return _collate_fn
         

@@ -107,32 +107,32 @@ class ModelConfig(ConfigClass):
 # class LoggingConfig(ConfigClass):
 #     name: str
 
-# @dataclass
-# class TrainingConfig(ConfigClass):
-#     executor_class: str
-#     epochs: int
-#     batch_size: int
-#     lr: float
-#     scheduler: str
-#     additional: Dict[str, any]
+@dataclass
+class TrainingConfig(ConfigClass):
+    executor_class: str
+    epochs: int
+    batch_size: int
+    lr: float
+    scheduler: str
+    additional: Dict[str, any]
 
-# @dataclass
-# class ValidationConfig(ConfigClass):
-#     batch_size: int
-#     step_size: int
-#     break_interval: int
-#     additional: Dict[str, any]
+@dataclass
+class ValidationConfig(ConfigClass):
+    batch_size: int
+    step_size: int
+    break_interval: int
+    additional: Dict[str, any]
 
-# @dataclass
-# class TestingConfig(ConfigClass):
-#     evaluation_name: str
-#     load_epoch: int
-#     load_model_path: str
-#     load_best_model: bool
-#     batch_size: int
-#     num_evaluation: int
-#     additional: Dict[str, any]
-#     metrics: List[Dict[str, str]]
+@dataclass
+class TestingConfig(ConfigClass):
+    evaluation_name: str
+    load_epoch: int
+    load_model_path: str
+    load_best_model: bool
+    batch_size: int
+    num_evaluation: int
+    additional: Dict[str, any]
+    metrics: List[Dict[str, str]]
 
 
 
