@@ -1,12 +1,79 @@
 from easydict import EasyDict
-from .global_variables import register_to, DataTransform_Registry
+from .global_variables import register_to, register_func_to_registry, DataTransform_Registry
 from transformers import AutoTokenizer
 import copy
 import pandas as pd
 from torchvision.transforms import ColorJitter, ToTensor
 from tqdm import tqdm
 from typing import Dict
+from collections.abc import Iterable
+from datasets import Dataset, DatasetDict
 
+def register_transform(fn):
+    register_func_to_registry(fn, DataTransform_Registry)
+    def _fn_wrapper(*args, **kwargs):
+        return fn(*args, **kwargs)
+    return _fn_wrapper
+
+class BaseTransform():
+    """
+    Most general functor definition
+    """
+    def __init__(self, name=None):
+        self.name = name or self.__class__.__name__
+        register_func_to_registry(self.name, DataTransform_Registry)
+
+    def __apply__(self, data, *args, **kwargs):
+        preprocesed_data = self._preprocess(data)
+        self._check_input(preprocesed_data)
+        return self._call(preprocesed_data)
+
+    def _check_input(self, data):
+        """
+        Check if the transformed can be applied on data. Override in subclasses
+        No constraints by default
+        """
+        return True
+    
+    def _preprocess(self, data):
+        """
+        Preprocess data for transform.
+        """
+        return data
+
+    def _call(self, data, *args, **kwargs):
+        raise NotImplementedError(f'Must implement {self.name}._call(data) to be a valid transform')
+
+class RowWiseTransform(BaseTransform):
+    """
+    Transform each element row-by-row
+    """
+    def __init__(self, name=None):
+        super().__init__(name=name)
+    
+    def __apply__(self, data, *args, **kwargs):
+        for row_n, row_data in enumerate(data):
+            self._call(row_data, row_n)
+    
+    def _call(self, row_data, row_n):
+        raise NotImplementedError(f'Must implement {self.name}._call(row_data, row_n) to be a valid transform')
+
+    def _check_input(self, data):
+        return isinstance(data, Iterable)
+
+class HFDatasetTransform(BaseTransform):
+    """
+    Transform using HuggingFace Dataset utility
+    """
+    def __init__(self, name=None):
+        super().__init__(name=name)
+    
+    def _check_input(self, data):
+        return isinstance(data, Dataset) or isinstance(data, DatasetDict)
+        
+
+
+    
 
 def multi_feature_row_transform(row_transform_fn):
     """
@@ -31,8 +98,12 @@ def single_feature_row_transform(row_transform_fn):
         transformed_data = None
         for feat_name, feat_data in in_features.items():
             transformed_data = [row_transform_fn(row, *args, **kwargs) for row in feat_data]
-        col_name = out_features[0] if len(out_features) else list(in_features.keys())[0]
-        return {col_name: transformed_data}
+        output = {}
+        for col_name in out_features:
+            output.update({col_name: [transformed_row[col_name] for transformed_row in transformed_data]})
+        return output
+        # col_name = out_features[0] if len(out_features) else list(in_features.keys())[0]
+        # return {col_name: transformed_data}
     return _transform_wrapper
 
 def ComposeTransforms(transform_fns):

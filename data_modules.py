@@ -133,10 +133,10 @@ class DataPipeline:
                 out_feature_names = transform.out_features
                 outputs.update(
                     DataTransform_Registry[transform_fn](
-                    in_features={fname: outputs[fname] for fname in use_feature_names},
-                    out_features=out_feature_names,
-                    **transform.kwargs)
-                )
+                        in_features={fname: outputs[fname] for fname in use_feature_names},
+                        out_features=out_feature_names,
+                        **transform.kwargs)
+                    )
                 pass
                 #NOTE: in-place transformation: self.data is altered. 
                 out_fields = set(outputs.keys())

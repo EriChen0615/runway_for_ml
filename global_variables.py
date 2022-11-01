@@ -7,10 +7,14 @@ Model_Registry = EasyDict()
 
 def register_to(registry, name=None):
     def _register_func(func):
-        fn = name or func.__name__
-        registry[fn] = func
+        register_func_to_registry(func, registry, name=name)
         @functools.wraps(func)
         def _func_wrapper(*args, **kwargs):
             return func(*args, **kwargs)
         return _func_wrapper
     return _register_func
+
+def register_func_to_registry(func, registry, name=None):
+    fn = name or func.__name__
+    assert fn not in registry, f"Cannot register {fn} due to duplicated name"
+    registry[fn] = func
