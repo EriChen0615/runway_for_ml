@@ -131,8 +131,9 @@ class DataPipeline:
                 transform_fn = transform.name
                 use_feature_names = transform.use_features
                 out_feature_names = transform.out_features
+                func = DataTransform_Registry[transform_fn]
                 outputs.update(
-                    DataTransform_Registry[transform_fn](
+                    func(
                         in_features={fname: outputs[fname] for fname in use_feature_names},
                         out_features=out_feature_names,
                         **transform.kwargs)

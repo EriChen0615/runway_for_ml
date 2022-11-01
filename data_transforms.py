@@ -6,7 +6,7 @@ import pandas as pd
 from torchvision.transforms import ColorJitter, ToTensor
 from tqdm import tqdm
 from typing import Dict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datasets import Dataset, DatasetDict
 
 def register_transform(fn):
@@ -19,14 +19,46 @@ class BaseTransform():
     """
     Most general functor definition
     """
-    def __init__(self, name=None):
+    def __init__(
+        self,
+        *args,
+        name=None,
+        input_mapping: Dict=None,
+        output_mapping: Dict=None,
+        **kwargs
+        ):
         self.name = name or self.__class__.__name__
+        self.input_mapping = input_mapping
+        self.output_mapping = output_mapping
         register_func_to_registry(self.name, DataTransform_Registry)
 
     def __apply__(self, data, *args, **kwargs):
-        preprocesed_data = self._preprocess(data)
-        self._check_input(preprocesed_data)
-        return self._call(preprocesed_data)
+        preprocesed_data = self._preprocess(data) # any preprocessing should be handled here
+        mapped_data = self._apply_mapping(preprocessed_data, self.input_mapping)
+        self._check_input(mapped_data)
+
+        output_data = self._call(**mapped_data) if self.input_mapping else self._call(mapped_data)
+        output_mapped_data = self._apply_mapping(output_data, self.output_mapping)
+        self._check_output(output_mapped_data)
+
+        return output_mapped_data
+        
+        # _call will expand keyword arguments from data if mapping [input_col_name : output_col_name] is given
+        # otherwise received whole data
+    
+    def _apply_mapping(self, data, in_out_col_mapping):
+        """
+        IMPORTANT: when input_mapping is given, data will be transformed into EasyDict
+        """
+        if in_out_col_mapping is None:
+            return data
+        assert isinstance(data, Mapping), f"input feature mapping cannot be performed on non-Mapping type objects!"
+        mapped_data = {}
+        for input_col, output_col in in_out_col_mapping.items():
+            mapped_data[output_col] = data[input_col]
+        return EasyDict(mapped_data)
+
+
 
     def _check_input(self, data):
         """
@@ -35,28 +67,45 @@ class BaseTransform():
         """
         return True
     
+    def _check_output(self, data):
+        """
+        Check if the transformed data fulfills certain conditions. Override in subclasses
+        No constraints by default
+        """
+        return True
+        
+    
     def _preprocess(self, data):
         """
         Preprocess data for transform.
         """
         return data
 
-    def _call(self, data, *args, **kwargs):
-        raise NotImplementedError(f'Must implement {self.name}._call(data) to be a valid transform')
+    def setup(self, *args, **kwargs):
+        """
+        setup any reusable resources for the transformed. Will be called before __apply__()
+        """
+        raise NotImplementedError(f"Must implement {self.name}.setup() to be a valid transform")
+
+    def _call(self, *args, **kwargs):
+        raise NotImplementedError(f'Must implement {self.name}._call() to be a valid transform')
 
 class RowWiseTransform(BaseTransform):
     """
     Transform each element row-by-row
     """
-    def __init__(self, name=None):
-        super().__init__(name=name)
-    
     def __apply__(self, data, *args, **kwargs):
-        for row_n, row_data in enumerate(data):
-            self._call(row_data, row_n)
-    
-    def _call(self, row_data, row_n):
-        raise NotImplementedError(f'Must implement {self.name}._call(row_data, row_n) to be a valid transform')
+        preprocesed_data = self._preprocess(data) # any preprocessing should be handled here
+        self._check_input(preprocesed_data)
+        for row_n, row_data in enumerate(preprocesed_data):
+            mapped_data = self._apply_mapping(row_data, self.input_mapping)
+            output_data = self._call(row_n, **mapped_data) if self.input_mapping else self._call(row_n, mapped_data)
+            output_mapped_data = self._apply_mapping(output_data, self.output_mapping)
+        self._check_output(output_mapped_data)
+        return output_mapped_data
+
+    def _call(self, row_n, row_data):
+        raise NotImplementedError(f'Must implement {self.name}._call() to be a valid transform')
 
     def _check_input(self, data):
         return isinstance(data, Iterable)
@@ -65,14 +114,24 @@ class HFDatasetTransform(BaseTransform):
     """
     Transform using HuggingFace Dataset utility
     """
-    def __init__(self, name=None):
-        super().__init__(name=name)
-    
     def _check_input(self, data):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict)
-        
+    
+    def _keep_columns(self, ds, keep_cols):
+        all_colummns = set(ds.features.keys())
+        remove_cols = list(all_colummns - set(keep_cols))
+        return ds.remove_columns(remove_cols)
 
-
+    def _apply_mapping(self, data, in_out_col_mapping):
+        if in_out_col_mapping is None:
+            return data
+        if isinstance(data, DatasetDict):
+            mapped_data = {out_col_name: data[in_col_name] for in_col_name, out_col_name in in_out_col_mapping.items()}
+            return mapped_data
+        else: # data is DatasetDict
+            data = data.rename_columns(in_out_col_mapping)
+            mapped_data = self._keep_columns(data, list(in_out_col_mapping.values()))
+            return mapped_data
     
 
 def multi_feature_row_transform(row_transform_fn):
