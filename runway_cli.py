@@ -2,6 +2,7 @@ import click
 import shutil
 import os
 import pathlib
+from test_data_transforms import test_data_main
 
 @click.group()
 def cli():
@@ -23,6 +24,18 @@ def init(dest_dir):
     shutil.copytree(os.path.join(runway_dir, 'configs'), os.path.join(dest_dir, 'configs/'))
     # shutil.copytree(os.path.join(runway_dir, 'code_templates'), ".")
     click.echo("Project initialized. Welcome to Runway!")
+
+@click.command()
+@click.option('--config', '-c', 'config_file',
+    required=True,
+    type=str)
+def inspect_data(config_file):
+    assert os.path.exists(config_file), """
+        The specified configuration file does not exist!
+    """
+    click.echo(f"Inspecting data pipeline defined in {config_file}")
+    test_data_main(config_file)
+
 
 @click.command('hi')
 def hi():

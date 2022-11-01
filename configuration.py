@@ -20,6 +20,9 @@ class ConfigClass:
     """
     additional: Dict[str, any] = None
     
+    def __init__(self, *args, **kwargs):
+        self.from_config(*args, **kwargs)
+
     def __post_init__(self):
     # Loop through the fields
         for field in fields(self):
@@ -70,6 +73,9 @@ class DataPipelineConfig(ConfigClass):
         self.regenerate = config_dict.get('regenerate', True)
         self.cache_data = config_dict.get('cache_data', True)
         self.dataloaders_use_features = config_dict.get('dataloaders_use_features')
+        self.do_inspect = config_dict.get('do_inspect', False)
+        self.inspector_config = config_dict.get('inspector_config', None)
+
 
 
 @dataclass

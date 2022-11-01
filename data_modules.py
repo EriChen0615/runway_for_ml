@@ -63,7 +63,8 @@ def _prepare_to_tensor(arr):
     else:
         raise NotImplementedError("Fail to prepare to tensor to collate samples")
 
-class DataPipeline:
+class DummyBase(object): pass
+class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
     def __init__(
         self, 
         config: DataPipelineConfig,
@@ -91,6 +92,8 @@ class DataPipeline:
         assert self.this_loader_name not in FeatureLoader_Registry, f"Identical Feature Loaders names detected, '{self.this_loader_name}' is already used!"
         FeatureLoader_Registry[self.this_loader_name] = self._LoadThisDataPipeline # register corresponding FeatureLoader
 
+        self.logger = None # placeholder for inspector
+
     def _LoadThisDataPipeline(self, split='train'):
             output_data = self.run()
             return output_data[split]
@@ -116,44 +119,55 @@ class DataPipeline:
             fl_name = in_feature.feature_loader.name
             fl_kwargs = in_feature.feature_loader.kwargs
             splits = in_feature.splits
-            use_cache = in_feature.use_cache
             for split in splits:
                 loaded_data = FeatureLoader_Registry[fl_name](**fl_kwargs, split=split)
                 for feat_name in feature_names:
                     self.data[split][feat_name] = loaded_data[feat_name]
+        # inspector
+        if hasattr(self, 'inspect_loaded_features'):
+            self.inspect_loaded_features(self.data)
+
     
     def apply_transforms(self):
-        for split in ['train', 'test', 'valid']:
-            pbar = tqdm(self.transforms[split], unit='op')
-            outputs = self.data[split]
+        all_outputs = EasyDict() 
+        for transformation_name, transform_infos in self.transforms:
+            outputs = None
+            trans_key = transformation_name #
+            split_and_name = transformation_name.split(':') # select splits e.g train:do_transform
+            split = None
+            if len(split_and_name) > 1:
+                split, trans_key = split_and_name[0], ':'.join(split_and_name[1:])
+                outputs = self.data[split] # if split is seleted, only process split
+            elif len(split_and_name) == 1:
+                outputs = self.data # otherwise
+
+            pbar = tqdm(transform_infos, unit='op')
             for transform in pbar:
-                pbar.set_description(f"{self.name}-{split}-{transform.name}")
+                pbar.set_description(f"{transformation_name}-{transform.name}")
                 transform_fn = transform.name
-                use_feature_names = transform.use_features
-                out_feature_names = transform.out_features
-                func = DataTransform_Registry[transform_fn]
-                outputs.update(
-                    func(
-                        in_features={fname: outputs[fname] for fname in use_feature_names},
-                        out_features=out_feature_names,
-                        **transform.kwargs)
-                    )
-                pass
-                #NOTE: in-place transformation: self.data is altered. 
-                out_fields = set(outputs.keys())
-                # for colname, output_data in outputs.items():
-                #     if colname[-1] == '+':
-                #         # self._append_to_col(split, colname, output_data)
-                #         out_fields.add(colname[:-1])
-                #     else:
-                #         # self._assign_to_col(split, colname, output_data)
-                #         out_fields.add(colname)
-            # only select the columns specified in `out_fields`
-            self.output_data[split] = _select_cols(outputs, list(out_fields))
+                in_col_mapping = transform.in_col_mapping
+                out_col_mapping = transform.out_col_mapping
+                func = DataTransform_Registry[transform_fn](input_mapping=in_col_mapping, out_col_mapping=out_col_mapping)
+                func.setup(**transform.setup_paras) 
+
+                if hasattr(self, 'inspect_transform_before'): # inspector function
+                    self.inspect_transform_before(transformation_name, transform, outputs)
+
+                outputs = func(outputs)
+
+                if hasattr(self, 'inspect_transform_after'):
+                    self.inspect_transform_after(transformation_name, transform, outputs)
+
+            all_outputs[trans_key] = outputs
+            if split is None:
+                self.output_data.update(outputs) # output_data is the exploded version
+            else:
+                self.output_data[split].update(outputs)
+
+
         self.output_ok_flag = True
-            # self.output_data[split] = outputs
-        # self._convert_out_data_to_datasets(self.dataloaders_use_features)
-        
+        return all_outputs
+
     def _convert_out_data_to_datasets(self, dataloaders_use_features): # make MapDataset with split_name as key
         self.result_datasets = EasyDict()
         for split in ['train', 'test', 'valid']:

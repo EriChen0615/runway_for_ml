@@ -1,0 +1,10 @@
+import os
+from .utils.config_system import read_config
+from .runway_main import initialize_config, prepare_data
+
+def test_data_main(config_file):
+    config_dict, meta_config, dp_config = initialize_config(config_file)
+    processed_data = prepare_data(dp_config)
+    pass
+
+    
