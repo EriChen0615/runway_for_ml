@@ -1,4 +1,5 @@
 import logging 
+from logging import StreamHandler
 from logging.handlers import RotatingFileHandler
 import os
 from collections.abc import Iterable, Mapping
@@ -15,12 +16,14 @@ class DataPipelineInspector(DummyBase):
     def setup_logger(self, log_dir, maxBytes=20000, backupCount=3):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
-        handler = RotatingFileHandler(
+        rot_file_handler = RotatingFileHandler(
             filename=os.path.join(log_dir, f"test-{self.name}.log"),
             maxBytes=maxBytes,
             backupCount=backupCount,
         )
-        self.logger.addHandler(handler)
+        console_handler = StreamHandler()
+        self.logger.addHandler(rot_file_handler)
+        self.logger.addHandler(console_handler)
     
     def setup_inspector(self, config_dict):
         self.do_inspect = True
@@ -32,10 +35,19 @@ class DataPipelineInspector(DummyBase):
         transform_fn = transform.name
         in_col_mapping = transform.in_col_mapping
         out_col_mapping = transform.out_col_mapping
-        self.logger.info(f"Transform name: {transform_fn}\nin_col_mapping: {in_col_mapping}\nout_col_mapping: {out_col_mapping}")
+        self.logger.info(
+            f"""Before Transfrom
+            Transform name: {transform_fn}
+            in_col_mapping: {in_col_mapping}
+            out_col_mapping: {out_col_mapping}
+            setup_kwargs: {transform.setup_kwargs}
+            """
+        )
+        
         pass
 
     def inspect_transform_after(self, transformation_name, transform, outputs):
+        self.logger.info("After Transform")
         pass
 
     def inspect_loaded_features(self, data):

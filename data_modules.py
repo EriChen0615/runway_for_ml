@@ -94,9 +94,14 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
 
         self.logger = None # placeholder for inspector
 
-    def _LoadThisDataPipeline(self, split='train'):
+    def _LoadThisDataPipeline(self, split=None, data_key=None):
             output_data = self.run()
-            return output_data[split]
+            if split is None:
+                return output_data
+            elif data_key is None:
+                return output_data[split]
+            else:
+                return output_data[split][data_key]
 
     def _assign_to_col(self, split, colname, in_data, out_data):
         # self.data[split].colname = data
@@ -125,7 +130,7 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
                 # for feat_name in feature_names:
                 #     self.data[split][feat_name] = loaded_data[feat_name]
         # inspector
-        if hasattr(self, 'inspect_loaded_features'):
+        if hasattr(self, 'inspect_loaded_features') and in_feature.get('inspect', True):
             self.inspect_loaded_features(self.data)
 
     
@@ -133,7 +138,7 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
         all_outputs = EasyDict() 
         for transformation_name, transform_infos in self.transforms.items():
             outputs = None
-            trans_key = transformation_name #
+            trans_key = transformation_name
             split_and_name = transformation_name.split(':') # select splits e.g train:do_transform
             split = None
             if len(split_and_name) > 1:
@@ -149,22 +154,23 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
                 in_col_mapping = transform.in_col_mapping
                 out_col_mapping = transform.out_col_mapping
                 func = DataTransform_Registry[transform_fn](input_mapping=in_col_mapping, out_col_mapping=out_col_mapping)
-                func.setup(**transform.setup_paras) 
+                func.setup(**transform.setup_kwargs) 
 
-                if hasattr(self, 'inspect_transform_before'): # inspector function
+                if hasattr(self, 'inspect_transform_before') and transform.get('inspect', True): # inspector function
                     self.inspect_transform_before(transformation_name, transform, outputs)
 
                 outputs = func(outputs)
 
-                if hasattr(self, 'inspect_transform_after'):
+                if hasattr(self, 'inspect_transform_after') and transform.get('inspect', True):
                     self.inspect_transform_after(transformation_name, transform, outputs)
 
-            all_outputs[trans_key] = outputs
-            if split is None:
-                self.output_data.update(outputs) # output_data is the exploded version
-            else:
-                self.output_data[split].update(outputs)
-
+        all_outputs[transformation_name] = outputs
+        if split is None: # if no split is given, must have a valid transformation name
+            self.output_data[trans_key] = outputs # output_data is the exploded version
+        elif len(trans_key) == 0: # split-wise processing, the usual route
+            self.output_data[split] = outputs
+        else: # stored in different trans_keys
+            self.output_data[split][trans_key] = outputs 
 
         self.output_ok_flag = True
         return all_outputs

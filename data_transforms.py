@@ -8,6 +8,7 @@ from tqdm import tqdm
 from typing import Dict
 from collections.abc import Iterable, Mapping
 from datasets import Dataset, DatasetDict
+import functools
 
 def register_transform(fn):
     register_func_to_registry(fn, DataTransform_Registry)
@@ -19,6 +20,10 @@ def keep_ds_columns(ds, keep_cols):
     all_colummns = set(ds.features.keys())
     remove_cols = list(all_colummns - set(keep_cols))
     return ds.remove_columns(remove_cols)
+
+def register_transform_functor(cls):
+    register_func_to_registry(cls, DataTransform_Registry)
+    return cls
 
 class BaseTransform():
     """
@@ -35,14 +40,19 @@ class BaseTransform():
         self.name = name or self.__class__.__name__
         self.input_mapping = input_mapping
         self.output_mapping = output_mapping
-        register_func_to_registry(self.name, DataTransform_Registry)
 
-    def __apply__(self, data, *args, **kwargs):
-        preprocesed_data = self._preprocess(data) # any preprocessing should be handled here
+    # @classmethod 
+    # def __init__subclass__(cls, **kwargs):
+    #     super().__init_subclass__(*args, **kwargs)
+    #     register_func_to_registry(cls.__name__, DataTransform_Registry)
+
+    def __call__(self, data, *args, **kwargs):
+        preprocessed_data = self._preprocess(data) # any preprocessing should be handled here
         mapped_data = self._apply_mapping(preprocessed_data, self.input_mapping)
         self._check_input(mapped_data)
 
-        output_data = self._call(**mapped_data) if self.input_mapping else self._call(mapped_data)
+        # output_data = self._call(**mapped_data) if self.input_mapping else self._call(mapped_data)
+        output_data = self._call(mapped_data)
         output_mapped_data = self._apply_mapping(output_data, self.output_mapping)
         self._check_output(output_mapped_data)
 
@@ -92,14 +102,19 @@ class BaseTransform():
         """
         raise NotImplementedError(f"Must implement {self.name}.setup() to be a valid transform")
 
-    def _call(self, *args, **kwargs):
+    def _call(self, data, *args, **kwargs):
         raise NotImplementedError(f'Must implement {self.name}._call() to be a valid transform')
 
 class RowWiseTransform(BaseTransform):
     """
     Transform each element row-by-row
     """
-    def __apply__(self, data, *args, **kwargs):
+    # @classmethod 
+    # def __init__subclass__(cls, **kwargs):
+    #     super().__init_subclass__(*args, **kwargs)
+    #     register_func_to_registry(cls.__name__, DataTransform_Registry)
+
+    def __call__(self, data, *args, **kwargs):
         preprocesed_data = self._preprocess(data) # any preprocessing should be handled here
         self._check_input(preprocesed_data)
         for row_n, row_data in enumerate(preprocesed_data):
@@ -119,12 +134,16 @@ class HFDatasetTransform(BaseTransform):
     """
     Transform using HuggingFace Dataset utility
     """
+    # @classmethod 
+    # def __init__subclass__(cls, **kwargs):
+    #     super().__init_subclass__(*args, **kwargs)
+    #     register_func_to_registry(cls.__name__, DataTransform_Registry)
+
     def _check_input(self, data):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict)
     
-
     def _apply_mapping(self, data, in_out_col_mapping):
-        if in_out_col_mapping is None:
+        if not in_out_col_mapping:
             return data
         if isinstance(data, DatasetDict):
             mapped_data = {out_col_name: data[in_col_name] for in_col_name, out_col_name in in_out_col_mapping.items()}
