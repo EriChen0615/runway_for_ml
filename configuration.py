@@ -11,9 +11,9 @@ import dataclasses
 from easydict import EasyDict
 from abc import ABC, abstractmethod
 from typing import Dict, List
+import typing as t
 from pprint import pprint
 
-@dataclass
 class ConfigClass:
     """
     Base class for all config classes. Have additional field for flexibility
@@ -23,12 +23,12 @@ class ConfigClass:
     def __init__(self, *args, **kwargs):
         self.from_config(*args, **kwargs)
 
-    def __post_init__(self):
-    # Loop through the fields
-        for field in fields(self):
-            # If there is a default and the value of the field is none we can assign a value
-            if not isinstance(field.default, dataclasses._MISSING_TYPE) and getattr(self, field.name) is None:
-                setattr(self, field.name, None)
+    # def __post_init__(self):
+    # # Loop through the fields
+    #     for field in fields(self):
+    #         # If there is a default and the value of the field is none we can assign a value
+    #         if not isinstance(field.default, dataclasses._MISSING_TYPE) and getattr(self, field.name) is None:
+    #             setattr(self, field.name, None)
 
     @abstractmethod
     def from_config(self, config: Dict[str, any], meta_config: Dict[str, any]=None):
@@ -47,10 +47,13 @@ class MetaConfig(ConfigClass):
     cuda: int = 0
     gpu_device: int = 0
 
-    def from_config(self, config: Dict[str, any], meta_config: Dict[str, any]=None):
+    @classmethod
+    def from_config(cls: t.Type['MetaConfig'], config: Dict[str, any], meta_config: Dict[str, any]=None):
         config_dict = config['meta_config']
         pprint(config_dict)
-        self.default_cache_dir = config_dict['default_cache_dir']
+        return cls(
+            default_cache_dir=config_dict['default_cache_dir']
+        )
 
 
 @dataclass
@@ -60,21 +63,27 @@ class DataPipelineConfig(ConfigClass):
     transforms: Dict[str, Dict[str, any]] = None # [split - [key - value]]
     dataloader_args: Dict[str, Dict[str, any]] = None # [split - [arg_name - arg_value]]
     cache_dir: str = ""
+    cache_data: bool = True
     regenerate: bool = True
     dataloaders_use_features: Dict[str, List[str]] = None
+    do_inspect: bool = False
+    inspector_config: Dict[str, any] = None
 
-    def from_config(self, config: Dict[str, any], meta_config: Dict[str, any], key_name: str = 'data_pipeline'):
+    @classmethod
+    def from_config(cls: t.Type['DataPipelineConfig'], config: Dict[str, any], meta_config: Dict[str, any], key_name: str = 'data_pipeline'):
         config_dict = config[key_name]
-        self.name = config_dict['name'] if 'name' in config_dict else "DefaultDataPipeline"
-        self.in_features = config_dict['in_features']
-        self.transforms = EasyDict(config_dict['transforms'])
-        self.dataloader_args = EasyDict(config_dict['dataloader_args'])
-        self.cache_dir = config_dict['cache_dir'] if 'cache_dir' in config_dict else meta_config.default_cache_dir
-        self.regenerate = config_dict.get('regenerate', True)
-        self.cache_data = config_dict.get('cache_data', True)
-        self.dataloaders_use_features = config_dict.get('dataloaders_use_features')
-        self.do_inspect = config_dict.get('do_inspect', False)
-        self.inspector_config = config_dict.get('inspector_config', None)
+        return cls(
+            name = config_dict['name'] if 'name' in config_dict else "DefaultDataPipeline",
+            in_features = config_dict['in_features'],
+            transforms = EasyDict(config_dict['transforms']),
+            dataloader_args = EasyDict(config_dict['dataloader_args']),
+            cache_dir = config_dict['cache_dir'] if 'cache_dir' in config_dict else meta_config.default_cache_dir,
+            regenerate = config_dict.get('regenerate', True),
+            cache_data = config_dict.get('cache_data', True),
+            dataloaders_use_features = config_dict.get('dataloaders_use_features'),
+            do_inspect = config_dict.get('do_inspect', False),
+            inspector_config = config_dict.get('inspector_config', None),
+        )
 
 
 

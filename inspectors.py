@@ -39,11 +39,12 @@ class DataPipelineInspector(DummyBase):
         pass
 
     def inspect_loaded_features(self, data):
-        self.logger.info(f"Loaded data: {data}")
-        if isinstance(data, Iterable):
-            indices = random.randint(0, len(data))
-            for i in indices:
-                self.logger.info(f"Index={i}: {data[i]}")
+        # self.logger.info(f"Loaded data: {data}")
+        # for split_name, data_split in data.items():
+        #     if isinstance(data_split, Iterable):
+        #         indices = random.sample(range(len(data_split)), 5)
+        #         for i in indices:
+        #             self.logger.info(f"Split={split_name}, Index={i}: {data[i]}")
         pass
     
 

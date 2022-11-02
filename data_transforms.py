@@ -15,6 +15,11 @@ def register_transform(fn):
         return fn(*args, **kwargs)
     return _fn_wrapper
 
+def keep_ds_columns(ds, keep_cols):
+    all_colummns = set(ds.features.keys())
+    remove_cols = list(all_colummns - set(keep_cols))
+    return ds.remove_columns(remove_cols)
+
 class BaseTransform():
     """
     Most general functor definition
@@ -117,10 +122,6 @@ class HFDatasetTransform(BaseTransform):
     def _check_input(self, data):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict)
     
-    def _keep_columns(self, ds, keep_cols):
-        all_colummns = set(ds.features.keys())
-        remove_cols = list(all_colummns - set(keep_cols))
-        return ds.remove_columns(remove_cols)
 
     def _apply_mapping(self, data, in_out_col_mapping):
         if in_out_col_mapping is None:
@@ -130,7 +131,7 @@ class HFDatasetTransform(BaseTransform):
             return mapped_data
         else: # data is DatasetDict
             data = data.rename_columns(in_out_col_mapping)
-            mapped_data = self._keep_columns(data, list(in_out_col_mapping.values()))
+            mapped_data = keep_ds_columns(data, list(in_out_col_mapping.values()))
             return mapped_data
     
 

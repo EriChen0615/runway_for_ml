@@ -120,9 +120,10 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
             fl_kwargs = in_feature.feature_loader.kwargs
             splits = in_feature.splits
             for split in splits:
-                loaded_data = FeatureLoader_Registry[fl_name](**fl_kwargs, split=split)
-                for feat_name in feature_names:
-                    self.data[split][feat_name] = loaded_data[feat_name]
+                loaded_data = FeatureLoader_Registry[fl_name](feature_names, **fl_kwargs, split=split)
+                self.data[split] = loaded_data
+                # for feat_name in feature_names:
+                #     self.data[split][feat_name] = loaded_data[feat_name]
         # inspector
         if hasattr(self, 'inspect_loaded_features'):
             self.inspect_loaded_features(self.data)
@@ -130,7 +131,7 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
     
     def apply_transforms(self):
         all_outputs = EasyDict() 
-        for transformation_name, transform_infos in self.transforms:
+        for transformation_name, transform_infos in self.transforms.items():
             outputs = None
             trans_key = transformation_name #
             split_and_name = transformation_name.split(':') # select splits e.g train:do_transform

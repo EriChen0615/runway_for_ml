@@ -23,8 +23,8 @@ from easydict import EasyDict
 
 def initialize_config(config_file):
     config_dict = read_config(config_file)
-    meta_config = MetaConfig(config_dict)  
-    dp_config = DataPipelineConfig(config_dict, meta_config)
+    meta_config = MetaConfig.from_config(config_dict)  
+    dp_config = DataPipelineConfig.from_config(config_dict, meta_config)
     # next_dp_config.from_config(config, meta_config, key_name="next_data_pipeline")
     return (
         config_dict,
@@ -36,7 +36,7 @@ def prepare_data(dp_config: DataPipelineConfig):
     data_pipeline = DataPipeline(dp_config)
     if dp_config.do_inspect:
         extend_instance(data_pipeline, DataPipelineInspector)
-        data_pipeline.setup_inspector(dp_config.inspector_args)
+        data_pipeline.setup_inspector(dp_config.inspector_config)
     processed_data = data_pipeline.run()
     return processed_data
 
