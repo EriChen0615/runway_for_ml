@@ -1,14 +1,16 @@
 from easydict import EasyDict
 from .global_variables import register_to, register_func_to_registry, DataTransform_Registry
 from transformers import AutoTokenizer
+import transformers
 import copy
 import pandas as pd
 from torchvision.transforms import ColorJitter, ToTensor
 from tqdm import tqdm
-from typing import Dict
+from typing import Dict, List
 from collections.abc import Iterable, Mapping
 from datasets import Dataset, DatasetDict
 import functools
+
 
 def register_transform(fn):
     register_func_to_registry(fn, DataTransform_Registry)
@@ -138,6 +140,12 @@ class HFDatasetTransform(BaseTransform):
     # def __init__subclass__(cls, **kwargs):
     #     super().__init_subclass__(*args, **kwargs)
     #     register_func_to_registry(cls.__name__, DataTransform_Registry)
+    def setup(self, rename_col_dict, *args, **kwargs):
+        """
+        setup any reusable resources for the transformed. Will be called before __call__()
+        For HFDataset, add rename_col_dict for renaming columns conveniently
+        """
+        self.rename_col_dict = rename_col_dict
 
     def _check_input(self, data):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict)
@@ -153,6 +161,49 @@ class HFDatasetTransform(BaseTransform):
             mapped_data = keep_ds_columns(data, list(in_out_col_mapping.values()))
             return mapped_data
     
+def tokenize_function(tokenizer, field, **kwargs):
+    def tokenize_function_wrapped(example):
+        return tokenizer.batch_encode_plus(example[field], **kwargs)
+    return tokenize_function_wrapped
+
+@register_transform_functor
+class HFDatasetTokenizeTransform(HFDatasetTransform):
+    def setup(self, rename_col_dict, tokenizer_config: EasyDict, tokenize_fields_list: List):
+        super().setup(rename_col_dict)
+        self.tokenize_fields_list = tokenize_fields_list
+        self.version_name = tokenizer_config.version_name
+        self.class_name = tokenizer_config.class_name
+        self.special_tokens = tokenizer_config.get('special_tokens', {})
+        self.tokenize_kwargs = tokenizer_config.get(
+            'tokenize_kwargs', 
+            {
+             'batched': True,
+             'load_from_cache_file': False,
+             'padding': 'max_length',
+             'truncation': True
+             }
+        )
+
+        TokenizerClass = getattr(transformers, self.class_name)
+        self.tokenizer = TokenizerClass.from_pretrained(self.version_name)
+
+        if self.class_name[:4] == 'GPT2':
+            self.tokenizer.pad_token = '[PAD]'
+        self.tokenizer.add_special_tokens(self.special_tokens)
+
+    def _call(self, dataset):
+        tokenized_dataset = dataset
+        for field_name in self.tokenize_fields_list:
+            tokenized_dataset \
+             = tokenized_dataset \
+            .map(tokenize_function(self.tokenizer, field_name, **self.tokenize_kwargs)) \
+            .rename_columns({
+                'input_ids': field_name+'_input_ids',
+                'attention_masks': field_name+'_attention_masks',
+            })
+        tokenized_dataset.rename_columns(self.rename_col_dict)
+        return tokenized_dataset
+
 
 def multi_feature_row_transform(row_transform_fn):
     """

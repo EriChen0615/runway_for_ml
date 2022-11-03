@@ -58,6 +58,8 @@ class MetaConfig(ConfigClass):
 
 @dataclass
 class DataPipelineConfig(ConfigClass):
+    DataPipelineLib: str = 'data_modules'
+    DataPipelineClass: str = 'DataPipeline'
     name: str = ""
     in_features: List[Dict[str, any]] = None 
     transforms: Dict[str, Dict[str, any]] = None # [split - [key - value]]
@@ -73,6 +75,8 @@ class DataPipelineConfig(ConfigClass):
     def from_config(cls: t.Type['DataPipelineConfig'], config: Dict[str, any], meta_config: Dict[str, any], key_name: str = 'data_pipeline'):
         config_dict = config[key_name]
         return cls(
+            DataPipelineLib = config_dict.get('DataPipelineLib', 'data_modules'),
+            DataPipelineClass = config_dict.get('DataPipelineClass', 'DataPipeline'),
             name = config_dict['name'] if 'name' in config_dict else "DefaultDataPipeline",
             in_features = config_dict['in_features'],
             transforms = EasyDict(config_dict['transforms']),
@@ -89,34 +93,30 @@ class DataPipelineConfig(ConfigClass):
 
 @dataclass
 class ModelConfig(ConfigClass):
-    model_name: str = None
-    model_lib: str = None # [HF | torch ...]
+    model_version: str = None
+    ModelLib: str = None # [transformers or custom modules]
     ModelClass: str = None
-    ModelConfigClass: str = None
-    model_config_args: Dict[str, any] = None
-    tokenize: bool = False
-    TokenizerClass: str = None
-    tokenizer_args: Dict[str, any] = None
+    tokenizer_config: Dict[str, any] = None
+    optimizer_config: Dict[str, any] = None
+    training_config: Dict[str, any] = None
+    inference_config: Dict[str, any] = None
+    additional_kwargs: Dict[str, any] = None
     # TokenizerModelVersion: str = None
-    special_tokens: List[Dict[str, any]] = None
     # input_transforms: List[any] = None
     # decode_input_transforms: List[any] = None
     # output_transforms: List[any] = None
 
     def from_config(self, config: Dict[str, any]):
-        config_dict = config.model
-        self.model_name = config_dict['model_name'] if 'model_name' in config_dict else "DefaultModel"
-        self.model_lib = config_dict['model_lib'] if 'model_lib' in config_dict else "HF"
-
+        config_dict = config.model_config
+        self.model_version = config_dict['model_name']
+        self.ModelLib = config_dict['ModelLib']
         self.ModelClass = config_dict['ModelClass']
-        self.ModelConfigClass = config_dict['ModelConfigClass']
-        self.model_config_args = config_dict.get('model_config_args', None)
 
-        # for NLP models, tokenizers are required
-        self.needs_tokenizer = config_dict.get('needs_tokenizer', False)
-        self.TokenizerClass = config_dict.get('TokenizerClass', None)
-        self.tokenizer_args = config_dict.get('tokenizer_args', None)
-        self.special_tokens = config_dict.get('special_tokens', [])
+        self.tokenizer_config = config_dict.get('tokenizer_config', None)
+        self.optimizer_config = config_dict.get('optimizer_config', None)
+        self.training_config = config_dict.get('training_config', None)
+        self.inference_config = config_dict.get('inference_config', None)
+        self.additional_kwargs = config_dict.get('additional_kwargs', None)
 
 # @dataclass
 # class LoggingConfig(ConfigClass):

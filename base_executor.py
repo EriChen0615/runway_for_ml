@@ -1,9 +1,8 @@
 import pytorch_lightning as pl
 from data_modules import DataPipeline
 from configuration import (
-    TrainingConfig,
-    TestingConfig,
-    ValidationConfig,
+    DataPipelineConfig,
+    ModelConfig,
 )
 
 class BaseExecutor(pl.LightningModule):
@@ -12,26 +11,22 @@ class BaseExecutor(pl.LightningModule):
     Defines the detail preprocessing/train/test/validation schemes
     """
     def __init__(self,
-        input_data_pipeline: DataPipeline, # the input dataset pipeline (without tokenization and model-specific operations)
-        model_data_pipeline: DataPipeline, # the data pipeline eventually used by the executor - contains model-specific preprocessing
-        model,
-        train_config: TrainingConfig,
-        test_config: TestingConfig,
-        valid_config: ValidationConfig,
+        input_data_pipeline_config: DataPipelineConfig,
+        model_datapipeline_config: DataPipelineConfig, # the input dataset pipeline (without tokenization and model-specific operations)
+        model_config: ModelConfig,
         ):
-        self.input_data_pipeline = input_data_pipeline
-        self.model_data_pipeline = model_data_pipeline
-        self.model = model
-        self.train_config = train_config
-        self.test_config = test_config
-        self.valid_config = valid_config
+        self.input_dp_config = input_data_pipeline_config
+        self.model_dp_config = model_datapipeline_config
+        self.input_data_pipeline = DataPipeline(self.input_dp_config)
+        self.model_data_pipeline = DataPipeline(self.model_dp_config)
+
+        self.model_config = model_config
     
     def prepare_data(self):
         """
         tokenization should happen here
         """
-        self.input_data_pipeline.run()
-        self.model_data_pipeline.run()
+        self.model_data_pipeline.run() # self.input_data_pipeline is only called when the transform is required.
     
     def setup(self, stage):
         pass

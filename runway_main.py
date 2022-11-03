@@ -33,6 +33,8 @@ def initialize_config(config_file):
     )
 
 def prepare_data(dp_config: DataPipelineConfig):
+    # DataPipelineClass = getattr(globals()[dp_config.DataPipelineLib], dp_config.DataPipelineClass)
+    # data_pipeline = DataPipelineClass(dp_config)
     data_pipeline = DataPipeline(dp_config)
     if dp_config.do_inspect:
         extend_instance(data_pipeline, DataPipelineInspector)
