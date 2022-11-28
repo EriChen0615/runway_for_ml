@@ -28,7 +28,6 @@ class DataPipelineInspector(DummyBase):
     def setup_inspector(self, config_dict):
         self.do_inspect = True
         self.setup_logger(config_dict['log_dir'])
-        
 
     def inspect_transform_before(self, transformation_name, transform, outputs):
         self.logger.info(f"{transformation_name}")

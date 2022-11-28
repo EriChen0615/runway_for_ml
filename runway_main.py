@@ -1,4 +1,5 @@
-from .data_modules import DataPipeline
+# from .data_modules import DataPipeline
+from .data_pipeline import DataPipeline
 from .configuration import (
     MetaConfig, 
     DataPipelineConfig, 

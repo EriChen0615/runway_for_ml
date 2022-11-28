@@ -9,4 +9,8 @@ def test_data_main(config_file):
     processed_data = prepare_data(dp_config)
     pass
 
+if __name__ == '__main__':
+    test_data_main('configs/exp_configs/example_experiment_config.jsonnet')
+    
+
     

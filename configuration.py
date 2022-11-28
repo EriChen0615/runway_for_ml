@@ -61,13 +61,9 @@ class DataPipelineConfig(ConfigClass):
     DataPipelineLib: str = 'data_modules'
     DataPipelineClass: str = 'DataPipeline'
     name: str = ""
-    in_features: List[Dict[str, any]] = None 
     transforms: Dict[str, Dict[str, any]] = None # [split - [key - value]]
     dataloader_args: Dict[str, Dict[str, any]] = None # [split - [arg_name - arg_value]]
     cache_dir: str = ""
-    cache_data: bool = True
-    regenerate: bool = True
-    dataloaders_use_features: Dict[str, List[str]] = None
     do_inspect: bool = False
     inspector_config: Dict[str, any] = None
 
@@ -78,13 +74,8 @@ class DataPipelineConfig(ConfigClass):
             DataPipelineLib = config_dict.get('DataPipelineLib', 'data_modules'),
             DataPipelineClass = config_dict.get('DataPipelineClass', 'DataPipeline'),
             name = config_dict['name'] if 'name' in config_dict else "DefaultDataPipeline",
-            in_features = config_dict['in_features'],
             transforms = EasyDict(config_dict['transforms']),
-            dataloader_args = EasyDict(config_dict['dataloader_args']),
             cache_dir = config_dict['cache_dir'] if 'cache_dir' in config_dict else meta_config.default_cache_dir,
-            regenerate = config_dict.get('regenerate', True),
-            cache_data = config_dict.get('cache_data', True),
-            dataloaders_use_features = config_dict.get('dataloaders_use_features'),
             do_inspect = config_dict.get('do_inspect', False),
             inspector_config = config_dict.get('inspector_config', None),
         )
