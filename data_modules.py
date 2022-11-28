@@ -143,7 +143,7 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
             split = None
             if len(split_and_name) > 1:
                 split, trans_key = split_and_name[0], ':'.join(split_and_name[1:])
-                outputs = self.data[split] # if split is seleted, only process split
+                outputs = self.data[split] # if split is selected, only process split
             elif len(split_and_name) == 1:
                 outputs = self.data # otherwise
 
@@ -209,6 +209,7 @@ class DataPipeline(DummyBase): # this tricks allow for dynamic mixin
             return batched_data
         return _collate_fn
         
+    # TODO
     def train_dataloader(self):
         if self.result_datasets is None:
             self._convert_out_data_to_datasets(self.dataloaders_use_features)
