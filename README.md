@@ -112,7 +112,7 @@ Note that
 
 You can override the following methods in the functor to implement your data transform:
 
-- `_call(self, ...)`: the argument lists depends on your superclass. The data processing logic should reside here.
+- `_call(self, data)`: the argument lists depends on your superclass. The data processing logic should reside here.
 - `_preprocess(self, data)`: preprocess data for transform. Can be used to handle edge cases/unify interfaces etc.
 - `setup(self, *args, **kwargs)`: where the functor is configured. E.g., changing transform parameters.
 - `_check_input(self, data)`: optional input checking

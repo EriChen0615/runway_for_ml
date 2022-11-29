@@ -22,6 +22,8 @@ class BaseExecutor(pl.LightningModule):
         self.dp = DataPipeline(self.input_dp_config)
 
         self.model_config = model_config
+        self.optimizer_config = model_config.optimizer_config
+        self.training_config = model_config.train 
         self.additional_kwargs = model_config.additional_kwargs
         
         self.mode = mode
@@ -44,21 +46,14 @@ class BaseExecutor(pl.LightningModule):
         else:
             raise NotImplementedError('The _init_model() method is not defined for library ' + model_config.ModelLib)
     
-    # def _init_tokenizer(self, tokenizer_config):
-    #     tokenizer_class_name = tokenizer_config.class_name
-    #     tokenizer_version_name = tokenizer_config.version_name
-    #     TokenizerClass = getattr(transformers, tokenizer_class_name)
-    #     self.tokenizer = TokenizerClass.from_pretrained(tokenizer_version_name)
-
-
     def prepare_data(self):
-        """
-        tokenization should happen here
-        """
-        self.model_data_pipeline.run() # self.input_data_pipeline is only called when the transform is required.
+        self.dp.run()
     
     def setup(self, stage):
-        self.pipeline_output_data = self.model_data_pipeline.output_data
+        """
+        Set up self.train_dataset, self.test_dataset and self.val_dataset etc.
+        """
+        pass
     
     def configure_optimizers(self):
         """
@@ -74,13 +69,31 @@ class BaseExecutor(pl.LightningModule):
         return optimizer
 
     def train_dataloader(self):
-        return self.model_data_pipeline.train_dataloader()
-    
+        self.train_dataset.set_format('torch')
+        return DataLoader(
+            self.train_dataset,
+            shuffle=True,
+            batch_size=self.training_config['batch_size'],
+            num_workers=self.training_config.get('dataloader_workers', 8)
+        )
+
     def val_dataloader(self):
-        return self.model_data_pipeline.valid_dataloader()
+        self.val_dataset.set_format('torch')
+        return DataLoader(
+            self.val_dataset,
+            shuffle=True,
+            batch_size=self.training_config['batch_size'],
+            num_workers=self.training_config.get('dataloader_workers', 8)
+        )
     
     def test_dataloader(self):
-        return self.model_data_pipeline.test_dataloader()
+        self.test_dataset.set_format('torch')
+        return DataLoader(
+            self.test_dataset,
+            shuffle=True,
+            batch_size=self.inference_config['batch_size'],
+            num_workers=self.inference_config.get('dataloader_workers', 8)
+        )
     
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
