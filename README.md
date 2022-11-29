@@ -48,6 +48,7 @@ Change into target directory and run `runway init` to initialize the project. Th
     - custom_modeling.py
 - metrics 
     - custom_metric.py
+main.py
 ```
 
 ## Coding Up Your Project
@@ -86,30 +87,28 @@ Runway provides a framework to separate **data**, **modeling**, **training/infer
 
 ## Data
 
-There are two aspects with data in ML stack - **loading** and **preprocessing**, which are handled by *feature loaders* and *data transforms*, respectively. You can configure and connect *feature loaders* and *data transformers* to form a *data pipeline* in the configuration file (usually `data_config.libsonnet`, or a custom jsonnet file).
+### Overview
 
-### Declaring Feature Loaders
+Data are read and processed in *Data Pipeline*. A *data pipeline* is a set of inter-connected *data transform*. A *data transform* is a configurable, functional (i.e., stateless) unit that takes in some data, transform and then return it. 
 
-A *feature loader* load the dataset. It is a function decorated by `@register_to(FeatureLoader_Registry`. The function must take `feature_names` and `split` as parameters. The return type of the function is not restricted so long as the following data transforms can operate on it.
+### Data Transform
 
-An example is given below:
+A *data transform* is implemented as a functor that is a subclass of *runway_for_ml.BaseTransform* that implements the `setup()` and the `_call()` function. You also need to register the transform with the `@register_transform_functor` decorator so that runway can use it. A declaration example is:
 
 ```python
-@register_to(FeatureLoader_Registry)
-def LoadGEMSGDDataset(feature_names, split='train'):
-    feature_dict = defaultdict(EasyDict) 
-    ds = load_dataset('gem', 'schema_guided_dialog', split=split)
-    feature_dict = keep_ds_columns(ds, feature_names)
-    return feature_dict
+@register_transform_functor
+class LinearizeDialogActsTransform(HFDatasetTransform):
+    def setup(self, ...):
+        pass
+
+    def _call(self, data):
+        ...
+        return 
 ```
 
-> The necessary imports are already given at `runway-init` call
-
-### Declaring Data Transforms
-
-A data transform is a functor (i.e., a class whose object is callable) that takes in data, process it, and then return it. There are no restrictions on the input/output types.
-
-Runway provides a few super-classes to help define data transforms that handles specific input type. For example, the `HFDatasetTransform` base class provides functionalities that work with HuggingFace's `datasets.Dataset` objects. Other useful base classes include `RowWiseTransform` that apply the same transformation to every row. If there is no suitable base class to inherit from, the functor should inherit `runway_for_ml.data_transforms.BaseTransform`.
+Note that 
+1. the `setup()` function configures the functor
+2. the `_call()` function performs the actual transformation
 
 You can override the following methods in the functor to implement your data transform:
 
@@ -120,32 +119,70 @@ You can override the following methods in the functor to implement your data tra
 - `_check_output(self, data)`: optional output checking
 - `_apply_mapping(self, data, in_out_col_mapping)`: this enables data field selection. May be defined in superclass.
 
-### Forming data pipeline
 
-A *data pipeline* is defined in the configuration file. The key components are:
+We provide a list of ready-to-use transforms. See documentation for the full list. 
+
+### Data Pipeline
+
+A *data pipeline* is a connection of data transforms aranged as a **Acyclic Directed Graph (DAG)**. That is, the output of the previous transform becomes the input to the next. The developer is responsible for making sure that the input/output formats agree.
+
+The DAG of *data pipeline* is defined in the configuration file. Below is an example:
 
 ```json
-{
-    "name": "name of pipeline",
-    "regenerate": true/false,
-    "do_inspect": true/false,
-    "inspector_config": {},
-    "in_features": [ 
-        {
-        "feature_names": ["feature1", "feature2"],
-        "feature_loader": "base_feature_loader",
-        "splits": ["train", "test", "valid"], // the splits available
-        "use_cache": true,
-        },
-        ...
-    ],
-    "transforms": {
-        "train": train_transforms,
-        "test": test_transforms,
-        "valid": valid_transforms,
+transforms: {
+    "input:LoadSGDData": {
+      transform_name: "LoadHFDataset",
+      setup_kwargs: {
+        dataset_path: "gem",
+        dataset_name: "schema_guided_dialog",
+      },
     },
-}
+    "process:Linearize": {
+      input_node: "input:LoadSGDData",
+      transform_name: "LinearizeDialogActsTransform",
+      setup_kwargs: {
+        linearizer_class: "SGD_TemplateGuidedLinearizer",
+        schema_paths: [
+          "data/schemas/train/schema.json",
+          "data/schemas/test/schema.json",
+          "data/schemas/dev/schema.json",
+        ],
+        sgd_data_dir: "data/dstc8-schema-guided-dialogue",
+        template_dir: "data/utterance_templates"
+      },
+      regenerate: false,
+      cache: true,
+      inspect: true,
+    },
+    "output:T5-Tokenize": {
+      input_node: "process:Linearize",
+      transform_name: "HFDatasetTokenizeTransform",
+      setup_kwargs: {
+        rename_col_dict: {
+          "target_input_ids": "labels",
+          "target_attention_mask": "output_mask",
+          "_linearized_input_ids": "input_ids",
+          "_linearized_attention_mask": "attention_mask",
+        },
+        tokenizer_config: T5TokenizerConfig,
+        tokenize_fields_list: ["target", "_linearized"],
+      },
+      regenerate: false,
+      cache: true,
+      inspect: true,
+    },
+  },
 ```
+
+Each item in the `transform` dictonary define a node in the DAG, the important fields are:
+
+1. The key: name of the node. Can be referenced to get data
+2. `transform_name`: the name of the functor
+3. `setup_kwargs`: the keyword arguments to be passed into the `setup()` function
+4. `input_node`: the name of input node whose output would become the input to this node.
+5. `regenerate`: whether to run the transform without using the cache
+6. `cache`: whether to cache the result of the run
+7. `inspect`: whether to inspect the data before/after the transform (only work with debugger now)
 
 ## Modeling
 

@@ -7,9 +7,8 @@ from typing import Union, List, Dict, Optional
 from .utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists, make_cache_file_name
 import os 
 from tqdm import tqdm
-from .global_variables import register_to, DataTransform_Registry, FeatureLoader_Registry
+from .global_variables import register_to, DataTransform_Registry
 from .data_transforms import *
-from .feature_loaders import *
 
 class DummyBase(object): pass
 class DataPipeline(DummyBase):
@@ -51,7 +50,7 @@ class DataPipeline(DummyBase):
         # Read from cache or disk when available
         if trans_id in self.output_cache:
             print(f"Load {trans_id} from program cache")
-            return self.cache_dict[trans_id]
+            return self.output_cache[trans_id]
         # Read from disk when instructed and available
         elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id):
             print(f"Load {trans_id} from disk cache")
@@ -91,4 +90,15 @@ class DataPipeline(DummyBase):
             if trans_type == 'output':
                 self.output_data[trans_name] = self._exec_transform(trans_id) 
         return self.output_data
+    
+    def get_data(self, out_transforms, explode=False):
+        if explode:
+            assert len(out_transforms)==1, "To explode data, only one field can be selected"
+            return self._exec_transform(out_transforms[0])
+        return EasyDict({
+            out_trans: self._exec_transform(out_trans)
+                for out_trans in out_transforms
+        })
+        
+
             

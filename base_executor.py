@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
-from data_modules import DataPipeline
-from configuration import (
+from .data_pipeline import DataPipeline
+from .configuration import (
     DataPipelineConfig,
     ModelConfig,
 )
@@ -13,27 +13,20 @@ class BaseExecutor(pl.LightningModule):
     Defines the detail preprocessing/train/test/validation schemes
     """
     def __init__(self,
-        input_data_pipeline_config: DataPipelineConfig,
-        model_datapipeline_config: DataPipelineConfig, # the input dataset pipeline (without tokenization and model-specific operations)
+        data_pipeline_config: DataPipelineConfig,
         model_config: ModelConfig,
-        mode,
+        inference_config,
+        mode, # train/infer/eval
         ):
-        self.input_dp_config = input_data_pipeline_config
-        self.model_dp_config = model_datapipeline_config
-        self.input_data_pipeline = DataPipeline(self.input_dp_config)
-        self.model_data_pipeline = DataPipeline(self.model_dp_config)
+        self.dp_config = data_pipeline_config
+        self.dp = DataPipeline(self.input_dp_config)
 
         self.model_config = model_config
-        self.training_config = model_config.training_config
-        self.testing_config = model_config.testing_config
         self.additional_kwargs = model_config.additional_kwargs
         
         self.mode = mode
 
         self._init_model(self.model_config)
-        if self.model_config.tokenizer_config:
-            self._init_tokenizer(self.model_config.tokenizer_config)
-            
         self.save_hyperparameters()
 
     
@@ -43,19 +36,19 @@ class BaseExecutor(pl.LightningModule):
             if model_config.checkpoint_path:
                 self.model = ModelClass.from_pretrained(
                     model_config.checkpoint_path, 
-                    **model_config.loading_kwargs)
+                    **model_config.load_checkpoint_kwargs)
             else:
                 self.model = ModelClass.from_pretrained(
                     model_config.model_version,
-                    **model_config.loading_kwargs)
+                    **model_config.load_checkpoint_kwargs)
         else:
             raise NotImplementedError('The _init_model() method is not defined for library ' + model_config.ModelLib)
     
-    def _init_tokenizer(self, tokenizer_config):
-        tokenizer_class_name = tokenizer_config.class_name
-        tokenizer_version_name = tokenizer_config.version_name
-        TokenizerClass = getattr(transformers, tokenizer_class_name)
-        self.tokenizer = TokenizerClass.from_pretrained(tokenizer_version_name)
+    # def _init_tokenizer(self, tokenizer_config):
+    #     tokenizer_class_name = tokenizer_config.class_name
+    #     tokenizer_version_name = tokenizer_config.version_name
+    #     TokenizerClass = getattr(transformers, tokenizer_class_name)
+    #     self.tokenizer = TokenizerClass.from_pretrained(tokenizer_version_name)
 
 
     def prepare_data(self):

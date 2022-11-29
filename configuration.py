@@ -88,11 +88,9 @@ class ModelConfig(ConfigClass):
     ModelClass: str = None
     model_version: str = None
     checkpoint_path: str = None
-    loading_kwargs: Dict[str, any] = None
-    tokenizer_config: Dict[str, any] = None
+    load_checkpoint_kwargs: Dict[str, any] = None
     optimizer_config: Dict[str, any] = None
     training_config: Dict[str, any] = None
-    testing_config: Dict[str, any] = None
     additional_kwargs: Dict[str, any] = None
     # TokenizerModelVersion: str = None
     # input_transforms: List[any] = None
@@ -106,11 +104,9 @@ class ModelConfig(ConfigClass):
         self.model_version = config_dict['model_name']
 
         self.checkpoint_path = config_dict.get('checkpoint_path', None)
-        self.loading_kwargs = config_dict.get('loading_kwargs', {})
-        self.tokenizer_config = config_dict.get('tokenizer_config', None)
+        self.load_checkpoint_kwargs = config_dict.get('loading_kwargs', {})
         self.optimizer_config = config_dict.get('optimizer_config', None)
         self.training_config = config_dict.get('training_config', None)
-        self.testing_config = config_dict.get('inference_config', None)
         self.additional_kwargs = config_dict.get('additional_kwargs', None)
 
 # @dataclass

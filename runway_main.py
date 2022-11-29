@@ -26,7 +26,6 @@ def initialize_config(config_file):
     config_dict = read_config(config_file)
     meta_config = MetaConfig.from_config(config_dict)  
     dp_config = DataPipelineConfig.from_config(config_dict, meta_config)
-    # next_dp_config.from_config(config, meta_config, key_name="next_data_pipeline")
     return (
         config_dict,
         meta_config,
@@ -40,8 +39,9 @@ def prepare_data(dp_config: DataPipelineConfig):
     if dp_config.do_inspect:
         extend_instance(data_pipeline, DataPipelineInspector)
         data_pipeline.setup_inspector(dp_config.inspector_config)
-    processed_data = data_pipeline.run()
-    return processed_data
+    return data_pipeline.get_data(['output:T5-Tokenize'], explode=True)
+    # processed_data = data_pipeline.run()
+    # return processed_data
 
 
 if __name__ == '__main__':
