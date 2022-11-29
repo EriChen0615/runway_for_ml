@@ -31,16 +31,14 @@ class DataPipelineInspector(DummyBase):
 
     def inspect_transform_before(self, transformation_name, transform, outputs):
         self.logger.info(f"{transformation_name}")
-        transform_fn = transform.name
-        in_col_mapping = transform.in_col_mapping
-        out_col_mapping = transform.out_col_mapping
+        transform_fn = transform.transform_name
         self.logger.info(
-            f"""Before Transfrom
-            Transform name: {transform_fn}
-            in_col_mapping: {in_col_mapping}
-            out_col_mapping: {out_col_mapping}
-            setup_kwargs: {transform.setup_kwargs}
-            """
+f"""
+=======================================
+Before Transfrom {transform_fn}
+*setup_kwargs: {transform.setup_kwargs}
+=======================================
+"""
         )
         
         pass

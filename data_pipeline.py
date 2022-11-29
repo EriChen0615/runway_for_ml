@@ -50,12 +50,16 @@ class DataPipeline(DummyBase):
 
         # Read from cache or disk when available
         if trans_id in self.output_cache:
+            print(f"Load {trans_id} from program cache")
             return self.cache_dict[trans_id]
         # Read from disk when instructed and available
         elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id):
+            print(f"Load {trans_id} from disk cache")
             outputs = self._read_from_cache(trans_id)
             self.output_cache[trans_id] = outputs
-            
+            return outputs
+
+        print("Execute Transform")
         # Initialize functor
         func = DataTransform_Registry[trans_info.transform_name]()
         func.setup(**trans_info.setup_kwargs)
@@ -67,18 +71,18 @@ class DataPipeline(DummyBase):
             input_trans_id = trans_info['input_node']
             input_data = self._exec_transform(input_trans_id)
 
-        if hasattr(self, 'inspect_transform_before') and transform.get('inspect', True): # inspector function
+        if hasattr(self, 'inspect_transform_before') and self.transforms[trans_id].get('inspect', True): # inspector function
             self.inspect_transform_before(trans_id, self.transforms[trans_id], input_data)
 
         output = func(input_data)
     
-        if hasattr(self, 'inspect_transform_before') and transform.get('inspect', True): # inspector function
+        if hasattr(self, 'inspect_transform_before') and self.transforms[trans_id].get('inspect', True): # inspector function
             self.inspect_transform_after(trans_id, self.transforms[trans_id], output)
 
         # Cache data if appropriate
-        self.output_cache[trans_id] = outputs
-        if trans_info.cache:
-            self._save_to_cache(trans_id, outputs)
+        self.output_cache[trans_id] = output
+        if trans_info.get('cache', False):
+            self._save_to_cache(trans_id, output)
         return output
 
     def apply_transforms(self):

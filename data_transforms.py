@@ -54,7 +54,7 @@ class BaseTransform():
         self._check_input(preprocessed_data)
 
         # output_data = self._call(**mapped_data) if self.input_mapping else self._call(mapped_data)
-        output_data = self._call(mapped_data)
+        output_data = self._call(preprocessed_data)
         # output_mapped_data = self._apply_mapping(output_data, self.output_mapping)
         self._check_output(output_data)
 
@@ -192,26 +192,30 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
         self.tokenizer.add_special_tokens(self.special_tokens)
 
     def _call(self, dataset):
-        tokenized_dataset = dataset
-        for field_name in self.tokenize_fields_list:
-            tokenized_dataset \
-             = tokenized_dataset \
-            .map(tokenize_function(self.tokenizer, field_name, **self.tokenize_kwargs)) \
-            .rename_columns({
-                'input_ids': field_name+'_input_ids',
-                'attention_masks': field_name+'_attention_masks',
-            })
-        tokenized_dataset.rename_columns(self.rename_col_dict)
-        return tokenized_dataset
+        results = {}
+        for split in ['train', 'test', 'validation']:
+            # ds = dataset[split].select((i for i in range(100)))
+            ds = dataset[split]
+            for field_name in self.tokenize_fields_list:
+                ds = ds\
+                .map(tokenize_function(self.tokenizer, field_name, **self.tokenize_kwargs), batched=True, load_from_cache_file=False) \
+                .rename_columns({
+                    'input_ids': field_name+'_input_ids',
+                    'attention_mask': field_name+'_attention_mask',
+                })
+            ds = ds.rename_columns(self.rename_col_dict)
+            results[split] = ds
+        return results
 
 @register_transform_functor
 class LoadHFDataset(BaseTransform):
-    def setup(self, dataset_name, fields=[]):
+    def setup(self, dataset_path, dataset_name, fields=[]):
+        self.dataset_path = dataset_path
         self.dataset_name = dataset_name
         self.fields = fields
     
-    def _call(self):
-        hf_ds = load_dataset(self.dataset_name)
+    def _call(self, data):
+        hf_ds = load_dataset(self.dataset_path, self.dataset_name)
         return hf_ds
 
 
