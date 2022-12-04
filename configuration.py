@@ -54,6 +54,7 @@ class MetaConfig(ConfigClass):
         return cls(
             default_cache_dir=config_dict['default_cache_dir']
         )
+    
 
 
 @dataclass
@@ -79,7 +80,6 @@ class DataPipelineConfig(ConfigClass):
             do_inspect = config_dict.get('do_inspect', False),
             inspector_config = config_dict.get('inspector_config', None),
         )
-
 
 
 @dataclass
@@ -108,6 +108,20 @@ class ModelConfig(ConfigClass):
         self.optimizer_config = config_dict.get('optimizer_config', None)
         self.training_config = config_dict.get('training_config', None)
         self.additional_kwargs = config_dict.get('additional_kwargs', None)
+
+@dataclass
+class ExecutorConfig(ConfigClass):
+    ExecutorClass: str
+    init_kwargs: Dict[str, any]
+    dp_config: DataPipelineConfig
+    model_config: ModelConfig
+
+    def from_config(self, config: Dict[str, any]):
+        config_dict = config.executor_config
+        ExecutorClass = config_dict['ExecutorClass']
+        init_kwargs = config_dict.get('init_kwargs', {})
+        model_config = ModelConfig.from_config(config_dict)
+
 
 # @dataclass
 # class LoggingConfig(ConfigClass):

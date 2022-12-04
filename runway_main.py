@@ -24,13 +24,15 @@ from easydict import EasyDict
 
 def initialize_config(config_file):
     config_dict = read_config(config_file)
-    meta_config = MetaConfig.from_config(config_dict)  
-    dp_config = DataPipelineConfig.from_config(config_dict, meta_config)
-    return (
-        config_dict,
-        meta_config,
-        dp_config,
-    )
+    return config_dict 
+    # meta_config = MetaConfig.from_config(config_dict)  
+    # dp_config = DataPipelineConfig.from_config(config_dict, meta_config)
+    # executor_config = c
+    # return (
+    #     config_dict,
+    #     meta_config,
+    #     dp_config,
+    # )
 
 def prepare_data(dp_config: DataPipelineConfig):
     # DataPipelineClass = getattr(globals()[dp_config.DataPipelineLib], dp_config.DataPipelineClass)
