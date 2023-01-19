@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
-from .data_pipeline import DataPipeline
-from .configuration import (
+from ..data_module.data_pipeline import DataPipeline
+from ..configs.configuration import (
     DataPipelineConfig,
     ModelConfig,
 )

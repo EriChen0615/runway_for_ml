@@ -49,7 +49,7 @@ class MetaConfig(ConfigClass):
 
     @classmethod
     def from_config(cls: t.Type['MetaConfig'], config: Dict[str, any], meta_config: Dict[str, any]=None):
-        config_dict = config['meta_config']
+        config_dict = config['meta']
         pprint(config_dict)
         return cls(
             default_cache_dir=config_dict['default_cache_dir']

@@ -6,7 +6,7 @@ Each transform defined here can be used as an independent unit to form a data pi
 Some common transforms are provided by runway
 """
 from runway_for_ml.data_modules import register_to, FeatureLoader_Registry, DataTransform_Registry
-from runway_for_ml.data_transforms import *
+from runway_for_ml.data_ops.data_transforms import *
 from easydict import EasyDict
 
 @register_to(DataTransform_Registry)

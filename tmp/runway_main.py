@@ -1,6 +1,6 @@
 # from .data_modules import DataPipeline
-from .data_pipeline import DataPipeline
-from .configuration import (
+from .data_ops.data_pipeline import DataPipeline
+from .configs.configuration import (
     MetaConfig, 
     DataPipelineConfig, 
     # ModelConfig, 
@@ -12,7 +12,7 @@ from .configuration import (
 import os
 from .utils.config_system import read_config
 from .utils.mixin_utils import extend_instance
-from .inspectors import DataPipelineInspector
+from .data_ops.inspectors import DataPipelineInspector
 from easydict import EasyDict
 
 

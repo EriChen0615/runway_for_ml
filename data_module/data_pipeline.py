@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from easydict import EasyDict
 from collections import defaultdict
-from .configuration import DataPipelineConfig
+from ..configs.configuration import DataPipelineConfig
 import torch
 from typing import Union, List, Dict, Optional
-from .utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists, make_cache_file_name
+from ..utils.cache_system import cache_data_to_disk, load_data_from_disk, cache_file_exists, make_cache_file_name
 import os 
 from tqdm import tqdm
-from .global_variables import register_to, DataTransform_Registry
+from ..utils.global_variables import register_to, DataTransform_Registry
 from .data_transforms import *
 
 class DummyBase(object): pass
@@ -19,7 +19,7 @@ class DataPipeline(DummyBase):
         self.config = config
 
         self.name = self.config.name
-        self.cache_dir = self.config.get('cache_dir', 'local_cache/')
+        self.cache_dir = self.config.get('cache_dir', 'cache/')
 
         self.transforms = EasyDict(self.config.transforms)
 

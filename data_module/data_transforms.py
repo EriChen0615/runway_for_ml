@@ -1,5 +1,5 @@
 from easydict import EasyDict
-from .global_variables import register_to, register_func_to_registry, DataTransform_Registry
+from ..utils.global_variables import register_to, register_func_to_registry, DataTransform_Registry
 from transformers import AutoTokenizer
 import transformers
 import copy

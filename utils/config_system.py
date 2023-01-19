@@ -21,6 +21,8 @@ from pprint import pprint
 import time
 from .dirs import create_dirs
 from pathlib import Path
+import sys
+import importlib
 
 def get_config_from_json(json_file):
     """
@@ -34,7 +36,7 @@ def get_config_from_json(json_file):
         config_dict = json.loads(_jsonnet.evaluate_file(json_file))
         # EasyDict allows to access dict values as attributes (works recursively).
         config = EasyDict(config_dict)
-        return config, config_dict
+        return config
     except ValueError:
         print("INVALID JSON file.. Please provide a good json file")
         exit(-1)
@@ -152,3 +154,13 @@ def parse_optional_args(config, args):
             raise('Support up to depth=6. Please do not hierarchy the config file too deep.')
             
     return config
+
+def import_user_modules(module_paths=[]):
+    module_paths.extend(['models', 'executors', 'data_ops'])
+    for module_path in module_paths:
+        module_path = os.path.abspath(module_path)
+
+        module_parent, module_name = os.path.split(module_path)
+        if module_name not in sys.modules:
+            sys.path.insert(0, module_parent)
+            importlib.import_module(module_name)
