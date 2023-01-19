@@ -18,7 +18,8 @@ class BaseExecutor(pl.LightningModule):
         model_config: ModelConfig,
         mode, # train/infer/eval
         train_config={},
-        infer_config={},
+        test_config={},
+        log_file_path=None,
         *args, **kwargs
         ):
         super().__init__()
@@ -28,9 +29,13 @@ class BaseExecutor(pl.LightningModule):
         self.model_config = model_config
         self.optimizer_config = train_config.optimizer_config
         self.training_config = train_config
+        self.test_config = test_config
         self.additional_kwargs = model_config.additional_kwargs
         
         self.mode = mode
+        self.log_file_path = log_file_path
+        self.log_list  = []
+        self.test_cnt = 0
 
         self._init_model(self.model_config)
         self.save_hyperparameters()
@@ -101,9 +106,9 @@ class BaseExecutor(pl.LightningModule):
     def test_dataloader(self):
         return DataLoader(
             self.test_dataset,
-            shuffle=True,
-            batch_size=self.inference_config['batch_size'],
-            num_workers=self.inference_config.get('dataloader_workers', 8)
+            shuffle=False,
+            batch_size=self.test_config['batch_size'],
+            num_workers=self.test_config.get('dataloader_workers', 8)
         )
     
     def forward(self, *args, **kwargs):
