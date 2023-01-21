@@ -30,7 +30,7 @@ class BaseExecutor(pl.LightningModule):
         self.optimizer_config = train_config.optimizer_config
         self.training_config = train_config
         self.test_config = test_config
-        self.additional_kwargs = model_config.additional_kwargs
+        self.additional_kwargs = model_config.get("additional_kwargs", {})
         
         self.mode = mode
         self.log_file_path = log_file_path
@@ -52,7 +52,7 @@ class BaseExecutor(pl.LightningModule):
                 self.model = ModelClass.from_pretrained(
                     model_config.model_version,
                     **model_config.load_checkpoint_kwargs)
-        elif model_config.ModelLib == 'modeling': # custom models
+        elif model_config.ModelLib == 'models': # custom models
             if model_config.checkpoint_path:
                 self.model = ModelClass.from_pretrained(
                     model_config.checkpoint_path, 

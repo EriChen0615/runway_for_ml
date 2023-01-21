@@ -141,6 +141,8 @@ class RunwayExperiment:
     
     def test(self):
         test_config = self.config_dict.test
+
+
         assert 'exp_version' in self.config_dict, "You need to specify experiment version to run test!"
         self.ver_num = self.config_dict['exp_version']
         self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
@@ -148,6 +150,7 @@ class RunwayExperiment:
         self.test_dir = self.exp_dir / f'test-{self.test_suffix}'
 
         print('test-directory:', self.test_dir)
+        self.save_config_to(self.test_dir)
 
         self.rw_executor = self.init_executor(mode='test')
         trainer = pl.Trainer(**test_config.get('trainer_paras', {}), default_root_dir=self.test_dir)
