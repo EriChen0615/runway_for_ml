@@ -1,29 +1,23 @@
 # runway_for_ml
 
 
-# Overview
+# Project Statement
 
-**Runway** is a ML framework built upon `pytorch-lightning` that delivers the last-mile solution so that researchers and engineers can focus on the essentials in ML research. The key features are:
+We recognize that despite the emergence of deep Learning frameworks such as `pytorch` and higher-level frameworks such as `pytorch lightning` that separates the concerns of data, model, training, inference, and testing. There are still needs for yet a higher-level framework that addresses **data preparation**, **experiments configuration**, **systematic logging**, and **working with remote GPU clusters** (e.g. HPC). These common, indispensable functionalities are often re-implemented for individual projects, which hurt reproducibility, costs precious time, and hinders effective communications between ML developers.
 
-1. A configurable functional **data processing pipeline** that is easy to inspect, use, and extend.
-2. An **experiment configuration system** to conduct experiments in different settings without changing the code.
-3. A **systematic logging system** that makes it easy to log results and manage experiments both locally or on online platforms (e.g. weights-and-bias)
-4. A set of tools that simplifies **training/testing on remote GPU clusters** (e.g. HPC/Multiple GPU training)
+We introduce **Runway**, a ML framework that delivers the last-mile solution so that researchers and engineers can focus on the essentials. In particular, we aim to 
+1. Provide a **configurable data processing pipeline** that is easy to inspect and manipulate.
+2. Provide an **experiment configuration system** so that it is convenient to conduct experiments in different settings without changing the code.
+3. Provide a **systematic logging system** that makes it easy to log results and manage experiments both locally or on online platforms (e.g. weights-and-bias)
+4. Provide a set of **tools that simplifies training/testing on remote GPU clusters** (e.g. HPC/Multiple GPU training)
 
-With *Runway*, we hope to help ML researchers and engineers focus on the essential part of machine learning - data processing, modeling, inference, training, and evaluation. Our goal is to build a robust and flexible framework that gives developers complete freedom in these essential parts, while removing the tedious book-keeping. 
+With *Runway*, we hope to help ML researchers and engineers focus on the essential part of machine learning - data processing, modeling, inference, training, and evaluation. Our goal is to build a robust and flexible framework that gives developers complete freedom in these essential parts, while removing the tedious book-keeping. The philosophy, if taken to the extreme, entails that every line of code should reflect a design decision, otherwise there should be a configuration or a ready-to-use tool available. 
 
-# Runway delivers research-ready ML pipeline
-
-
-
-
-
-
-# How to Use
+# Workflow
 
 ## Installation
 
-Install with pip: `pip install runway_for_ml` #TODO
+Install with pip: `pip install runway_for_ml`
 
 Alternatively, you can add runway as a submodule for more flexibility by running the following command
 
@@ -34,31 +28,27 @@ git commit -m "Added runway_for_ml to the project"
 
 ## Initialize Runway Project
 
-To obtain the skeleton of a Runway project:
-1. Change into the root directory of your project (i.e., root of git)
-2. (Unix) run `bash runway_for_ml/init_project.sh` to initialize the project. This would give you the following folders & files:
+Change into target directory and run `runway init` to initialize the project. This would give you the following files/folders:
 
 ```
-- cache (default caching location)
 - data (where data is stored)
+- local_cache (default caching location)
 - third_party (where third party code goes)
-- experiments (where experiment results, including checkpoints and logs are stored)
-- configs (files for configuring experiments)
+- experiments (where experiments are stored)
+- configs
     - meta_config.libsonnet
     - data_config.libsonnet
     - model_config.libsonnet
-    - example.jsonnet (example file)
-- src (Your source code)
-    main.py (entry point to the program)
-    - data_ops (where custom data transforms are defined)
-        - custom_op1.py
-        - custom_op2.py 
-        ...
-    - executors (where custom LightningModule subclasses specifying training/testing/validating are defined)
-        - custom_executor1.py
-        - custom_executor2.py
-    - custom_folders...
-    ...
+- data_processing
+    - data_transforms.py
+    - feature_loaders.py
+- executors
+    - custom_executor.py
+- modeling
+    - custom_modeling.py
+- metrics 
+    - custom_metric.py
+main.py
 ```
 
 ## Coding Up Your Project
