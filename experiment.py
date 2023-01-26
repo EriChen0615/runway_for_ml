@@ -60,7 +60,7 @@ class RunwayExperiment:
                 csv_logger = pl_loggers.CSVLogger(save_dir=log_dir)
                 loggers.append(csv_logger)
             elif logger_type == "tensorboard":
-                tb_logger = pl_loggers.TensorBoardLogger(save_dir=log_dir)
+                tb_logger = pl_loggers.TensorBoardLogger(save_dir=log_dir, sub_dir='tb_log')
                 loggers.append(tb_logger)
             elif logger_type == 'wandb':
                 assert "WANDB" in self.meta_conf, "WANDB configuration missing in config file, but wandb_logger is used"

@@ -7,6 +7,9 @@ from ..configs.configuration import (
 import transformers
 from transformers import AdamW, Adafactor, get_scheduler
 from torch.utils.data import DataLoader
+from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+import logging
+logger = logging.getLogger(__name__)
 
 class BaseExecutor(pl.LightningModule):
     """
@@ -23,6 +26,7 @@ class BaseExecutor(pl.LightningModule):
         *args, **kwargs
         ):
         super().__init__()
+        self.save_hyperparameters()
         self.dp_config = data_pipeline_config
         self.dp = DataPipeline(self.dp_config)
 
@@ -71,7 +75,14 @@ class BaseExecutor(pl.LightningModule):
         """
         Set up self.train_dataset, self.test_dataset and self.val_dataset etc.
         """
-        raise NotImplementedError('Need to implement setup()') 
+        for trainer_logger in self.trainer.loggers:
+            if type(trainer_logger) == TensorBoardLogger:
+                self.tb_logger = trainer_logger
+            elif type(trainer_logger) == WandbLogger:
+                self.wandb_logger = trainer_logger
+                self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
+            else:
+                logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
     
     def configure_optimizers(self):
         """
