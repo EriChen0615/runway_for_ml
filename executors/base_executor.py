@@ -44,6 +44,17 @@ class BaseExecutor(pl.LightningModule):
         self._init_model(self.model_config)
         self.save_hyperparameters()
 
+        self.use_wandb = False
+        for trainer_logger in kwargs.get('logger', []):
+            if type(trainer_logger) == TensorBoardLogger:
+                self.tb_logger = trainer_logger
+            elif type(trainer_logger) == WandbLogger:
+                self.use_wandb = True
+                self.wandb_logger = trainer_logger
+                self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
+            else:
+                logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
+
     
     def _init_model(self, model_config: ModelConfig):
         ModelClass = getattr(globals()[model_config.ModelLib], model_config.ModelClass)
@@ -75,14 +86,8 @@ class BaseExecutor(pl.LightningModule):
         """
         Set up self.train_dataset, self.test_dataset and self.val_dataset etc.
         """
-        for trainer_logger in self.trainer.loggers:
-            if type(trainer_logger) == TensorBoardLogger:
-                self.tb_logger = trainer_logger
-            elif type(trainer_logger) == WandbLogger:
-                self.wandb_logger = trainer_logger
-                self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
-            else:
-                logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
+        pass
+        
     
     def configure_optimizers(self):
         """
