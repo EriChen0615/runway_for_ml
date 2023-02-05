@@ -58,7 +58,6 @@ class DataPipeline(DummyBase):
             self.output_cache[trans_id] = outputs
             return outputs
 
-        print("Execute Transform")
         # Initialize functor
         func = DataTransform_Registry[trans_info.transform_name]()
         func.setup(**trans_info.setup_kwargs)
@@ -72,6 +71,8 @@ class DataPipeline(DummyBase):
 
         if hasattr(self, 'inspect_transform_before') and self.transforms[trans_id].get('inspect', True): # inspector function
             self.inspect_transform_before(trans_id, self.transforms[trans_id], input_data)
+
+        print("Execute Transform:", trans_info.transform_name)
 
         output = func(input_data)
     

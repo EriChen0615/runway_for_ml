@@ -215,7 +215,7 @@ class LoadHFDataset(BaseTransform):
         self.fields = fields
     
     def _call(self, data):
-        hf_ds = load_dataset(self.dataset_path, self.dataset_name, cache_dir='./cache/')
+        hf_ds = load_dataset(f"{self.dataset_path}/{self.dataset_name}", cache_dir='./cache/')
         return hf_ds
 
 
