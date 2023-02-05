@@ -14,18 +14,83 @@ With *Runway*, we hope to help ML researchers and engineers focus on the essenti
 
 # Runway delivers research-ready ML pipeline
 
+![The pipeline defined by Runway](assets/figures/runway_pipeline.png)
 
+Runway organizes research ML pipeline into four stages:
 
+1. Data Preprocessing
+2. Training
+3. Testing / Inference
+4. Evaluation
 
+You can define and configure each stage in the configuration file (a jsonnet file), and use the compositionality of jsonnet to modularize your config. 
+
+## Data Preprocessing
+
+In this stage, we preprocess our dataset for training and testing. The preprocessing is defined as a directed acyclic graph (i.e., graph with directional edges and no loops), where each node is a functional transform that takes some data and return the processed data.
+
+Except for the first node (with name `load:<node_name>`), all other nodes will take the output of the `input_node` as its input. The node will set up (by calling `setup()`) and call the functor specified (i.e., a callable object, initialized from a class with `__call__` defined) to process the data. 
+
+A pipeline is defined by a dictionary of node declaration, following the format:
+
+```json
+{
+  "transforms": {
+    "input:NameOfNode": { # name of the node 
+      "input_node": "name of input node", 
+      "transform_name": "name of your functor", 
+      "setup_kwargs": { # used to setup the functor
+        "arg_name1": "value1",
+        "arg_name2": "value2",
+      },
+      "regenerate": false, # whether to re-run the transform, regardless of whether cache can be read
+      "cache": true, # whether to save the data to cache
+      "inspect": true # whether to get information printed for debugging or sanity checking
+    }
+  }
+}
+```
+
+## Training and Testing
+
+Training and Testing are handled by `Executor`s. An `Executor` is just a subclass of pytorch-lightning"s `LightningModule`, where we define:
+
+1. How to make the train/test/validation dataloaders
+2. How to perform train/test/validation steps
+3. What to do when train/test/validation ends, etc. Checkout the [LightningModule documentation](https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_module.html) 
+
+## Experiment Management
+
+Runway manages ML research in terms of experiments. An experiment should contain the model checkpoints, as well as all the tests which uses those checkpoints. Runway keeps your experiments organized locally, in the folder structure like following:
+
+- experiments
+    - <exp_name1>_V0
+    - <exp_name1>_V1
+        - train
+          - lightning_logs
+              - Version0
+                  - checkpoints
+                      - ... ckpt files
+        - test-<test_name1>
+          - test_cases.csv
+          - metrics.csv
+        - test-<test_name2>
+        ...
+    - <exp_name2>_V0
+    ...
+
+## Evaluation
+
+Evaluation takes the model"s output, run it through the evaluation pipeline to get various metrics and scores. 
 
 
 # How to Use
 
 ## Installation
 
-Install with pip: `pip install runway_for_ml` #TODO
+<!-- Install with pip: `pip install runway_for_ml` #TODO -->
 
-Alternatively, you can add runway as a submodule for more flexibility by running the following command
+Add runway as a submodule for more flexibility by running the following command
 
 ```bash
 git submodule add git@github.com:EriChen0615/runway_for_ml.git runway_for_ml
@@ -61,11 +126,125 @@ To obtain the skeleton of a Runway project:
     ...
 ```
 
-## Coding Up Your Project
+## Data Preprocessing 
 
-After setting up the runway project, you are ready to code! See [Development Manual](#-Development-Manual) for detail on how to develop code and test as you go with runway.
+### Writing data ops (data transforms) to preprocess data
 
-## Training 
+You should define your data transform functor under `src/data_ops/`. To define a functor that can be used by runway, you need to:
+
+1. Define the class for the functor, inherit one of the runway transform base classes, listed [here](#runway-data-transform-base-classes).
+2. Decorate the class with `@register_transform_functor`
+3. Implement `setup()` and `_call()` functions. `setup()` allows you to configurate the transform, and `_call()` is the actual transform
+
+An example is given below:
+
+```python
+@register_transform_functor
+class FilterServicesTransform(HFDatasetTransform):
+    def setup(self, services_to_keep=None):
+        self.services_to_keep = services_to_keep
+    
+    def _call(self, dataset: Dataset):
+        for split in ['train', 'test', 'validation']:
+            dataset[split] = dataset[split].filter(lambda x: x['service'] in self.services_to_keep)
+        return dataset
+```
+
+### Define the data pipeline in config file
+
+A *data pipeline* is a connection of data transforms aranged as a **Acyclic Directed Graph (DAG)**. That is, the output of the previous transform becomes the input to the next. The developer is responsible for making sure that the input/output formats agree.
+
+The DAG of *data pipeline* is defined in the jsonnet configuration file. Below is an example:
+
+```json
+ {
+  "data_pipeline": 
+    "name": "GEMSGDDataPipeline",
+    "regenerate": false,
+    {
+      "transforms": {
+      "input:LoadSGDData": {
+        "transform_name": "LoadHFDataset",
+        "setup_kwargs": {
+          "dataset_path": "gem",
+          "dataset_name": "schema_guided_dialog",
+        },
+      },
+      "process:Linearize": {
+        "input_node": "input:LoadSGDData",
+        "transform_name": "LinearizeDialogActsTransform",
+        "setup_kwargs": {
+          "linearizer_class": "SGD_TemplateGuidedLinearizer",
+          "schema_paths": [
+            "data/schemas/train/schema.json",
+            "data/schemas/test/schema.json",
+            "data/schemas/dev/schema.json",
+          ],
+          "sgd_data_dir": "data/dstc8-schema-guided-dialogue",
+          "template_dir": "data/utterance_templates"
+        },
+        "regenerate": false,
+        "cache": true,
+        "inspect": true,
+      },
+      "output:T5-Tokenize": {
+        "input_node": "process:Linearize",
+        "transform_name": "HFDatasetTokenizeTransform",
+        "setup_kwargs": {
+          "rename_col_dict": {
+            "target_input_ids": "labels",
+            "target_attention_mask": "output_mask",
+            "_linearized_input_ids": "input_ids",
+            "_linearized_attention_mask": "attention_mask",
+          },
+          "tokenizer_config": T5TokenizerConfig,
+          "tokenize_fields_list": ["target", "_linearized"],
+        },
+        "regenerate": false,
+        "cache": true,
+        "inspect": true,
+      },
+      "output:easy_SGD_Weather_1": {
+        "input_node": "output:T5-Tokenize",
+        "transform_name": "FilterServicesTransform",
+        "setup_kwargs": {
+          "services_to_keep": ["Weather_1"],
+        },
+        "regenerate": true,
+        "cache": true,
+      }
+    }
+  }
+}, 
+```
+
+
+Each item in the `transform` dictonary define a node in the DAG, the important fields are:
+
+1. The key: name of the node, in the format of `[input|process|output]:<node_name>` to indicate its role. Can be referenced to get data. 
+2. `transform_name`: the name of the functor
+3. `setup_kwargs`: the keyword arguments to be passed into the `setup()` function
+4. `input_node`: the name of input node whose output would become the input to this node.
+5. `regenerate`: whether to run the transform without using the cache
+6. `cache`: whether to cache the result of the run
+7. `inspect`: whether to inspect the data before/after the transform (only work with debugger now)
+
+### Running the data pipeline
+
+You can run the data pipeline in the commandline.
+
+```bash
+python src/main.py \
+    --experiment_name "test_run" \
+    --config "configs/test_run.jsonnet" \
+    --opts \
+    test.batch_size=16 \
+    test.load_model_path=/path/to/here
+```
+
+For use of CLI, refer to [detailed manual of command line](#command-line-manual)
+
+## Training & Testing 
 
 Runway is organized in *experiments*. Each experiment corresponds to one trained model and possibly multiple inferences/evaluations. 
 
@@ -134,9 +313,7 @@ We provide a list of ready-to-use transforms. See documentation for the full lis
 
 ### Data Pipeline
 
-A *data pipeline* is a connection of data transforms aranged as a **Acyclic Directed Graph (DAG)**. That is, the output of the previous transform becomes the input to the next. The developer is responsible for making sure that the input/output formats agree.
 
-The DAG of *data pipeline* is defined in the configuration file. Below is an example:
 
 ```json
 transforms: {
@@ -184,22 +361,15 @@ transforms: {
   },
 ```
 
-Each item in the `transform` dictonary define a node in the DAG, the important fields are:
-
-1. The key: name of the node. Can be referenced to get data
-2. `transform_name`: the name of the functor
-3. `setup_kwargs`: the keyword arguments to be passed into the `setup()` function
-4. `input_node`: the name of input node whose output would become the input to this node.
-5. `regenerate`: whether to run the transform without using the cache
-6. `cache`: whether to cache the result of the run
-7. `inspect`: whether to inspect the data before/after the transform (only work with debugger now)
 
 ## Modeling
 
 
+# Appendix
 
+## Runway data transform base classes
 
+## Command line manual
 
-
-
+## Built-in data transforms
 
