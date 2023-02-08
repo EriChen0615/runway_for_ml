@@ -6,6 +6,7 @@ from ..configs.configuration import (
 )
 import transformers
 from transformers import AdamW, Adafactor, get_scheduler
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 import logging
@@ -23,12 +24,15 @@ class BaseExecutor(pl.LightningModule):
         train_config={},
         test_config={},
         log_file_path=None,
+        eval_pipeline_config: DataPipelineConfig=None,
         *args, **kwargs
         ):
         super().__init__()
         self.save_hyperparameters()
         self.dp_config = data_pipeline_config
         self.dp = DataPipeline(self.dp_config)
+        self.eval_dp_config = eval_pipeline_config
+        self.eval_pipeline = DataPipeline(self.eval_dp_config)
 
         self.model_config = model_config
         self.optimizer_config = train_config.optimizer_config
@@ -40,6 +44,7 @@ class BaseExecutor(pl.LightningModule):
         self.log_file_path = log_file_path
         self.log_list  = []
         self.test_cnt = 0
+        self.valid_cnt = 0
 
         self._init_model(self.model_config)
         self.save_hyperparameters()
@@ -80,7 +85,8 @@ class BaseExecutor(pl.LightningModule):
             raise NotImplementedError('The _init_model() method is not defined for library ' + model_config.ModelLib)
     
     def prepare_data(self):
-        self.dp.apply_transforms()
+        # self.dp.apply_transforms()
+        pass
     
     def setup(self, stage):
         """
@@ -99,8 +105,12 @@ class BaseExecutor(pl.LightningModule):
             optimizer = AdamW(self.parameters(), **optimizer_params)
         elif optimizer_name == 'Adafactor':
             optimizer = Adafactor(self.parameters(), **optimizer_params)
+        elif optimizer_name == 'Adam':
+            optimizer = Adam(self.parameters(), **optimizer_params)
         else:
             raise ValueError(f"Invaild optimizer name: {optimizer_name}")
+        
+        #TODO add learning rate scheduler
         return optimizer
 
     def train_dataloader(self):

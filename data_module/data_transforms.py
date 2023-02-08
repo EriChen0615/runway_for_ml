@@ -218,4 +218,11 @@ class LoadHFDataset(BaseTransform):
         hf_ds = load_dataset(f"{self.dataset_path}/{self.dataset_name}", cache_dir='./cache/')
         return hf_ds
 
+@register_transform_functor
+class DummyTransform(BaseTransform):
+    def setup(self):
+        pass
+
+    def _call(self, data):
+        return data
 

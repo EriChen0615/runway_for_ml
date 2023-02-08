@@ -75,6 +75,7 @@ class RunwayExperiment:
     def init_executor(self, mode='train'):
         meta_config = self.config_dict.meta
         dp_config = self.config_dict.data_pipeline
+        eval_pipeline_config = self.config_dict.eval['eval_pipeline_config']
         executor_config = self.config_dict.executor
         train_config = self.config_dict.train
         test_config = self.config_dict.test
@@ -93,6 +94,7 @@ class RunwayExperiment:
                 train_config=train_config,
                 logger=loggers,
                 tokenizer=tokenizer,
+                eval_pipeline_config=eval_pipeline_config,
                 **executor_config.init_kwargs
             )
         elif mode == 'test':

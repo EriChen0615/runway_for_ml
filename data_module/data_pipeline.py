@@ -29,6 +29,9 @@ class DataPipeline(DummyBase):
         # Datapipeline also registered as a feature loader to compose more complex pipelines
 
         self.logger = None # placeholder for inspector
+
+        # convenient variables
+        self.input_transform_ids = [trans_id for trans_id in self.transforms]
     
     def _read_from_cache(self, trans_id):
         data = load_data_from_disk(trans_id, self.cache_dir)
@@ -42,7 +45,7 @@ class DataPipeline(DummyBase):
         return cache_file_exists(cache_file_name)
 
 
-    def _exec_transform(self, trans_id):
+    def _exec_transform(self, trans_id, input_data_dict={}):
         # parse transform info
         trans_type, trans_name = trans_id.split(':')
         trans_info = self.transforms[trans_id]
@@ -65,14 +68,22 @@ class DataPipeline(DummyBase):
 
         # Get input_data
         input_data = None
-        if trans_type != "input" and trans_info['input_node']:
+        if trans_id not in input_data_dict \
+        and trans_type != "input" \
+        and trans_info['input_node']:
             input_trans_id = trans_info['input_node']
-            input_data = self._exec_transform(input_trans_id)
+            input_data = self._exec_transform(input_trans_id, input_data_dict=input_data_dict)
+        elif trans_id in input_data_dict: # directly specify input_data using the input_data_dict dictionary
+            input_data = input_data_dict[trans_id]
+        else:
+            pass
+            # raise RuntimeError(f"input data to {input_trans_id} cannot be obtained. Pass in input_data_dict or define input_node for the transform")
+
 
         if hasattr(self, 'inspect_transform_before') and self.transforms[trans_id].get('inspect', True): # inspector function
             self.inspect_transform_before(trans_id, self.transforms[trans_id], input_data)
 
-        print("Execute Transform:", trans_info.transform_name)
+        print("Node:", trans_id, "\nExecute Transform:", trans_info.transform_name)
 
         output = func(input_data)
     
@@ -85,19 +96,19 @@ class DataPipeline(DummyBase):
             self._save_to_cache(trans_id, output)
         return output
 
-    def apply_transforms(self):
+    def apply_transforms(self, input_data_dict={}):
         for trans_id in self.transforms:
             trans_type, trans_name  = trans_id.split(':')
             if trans_type == 'output':
-                self.output_data[trans_name] = self._exec_transform(trans_id) 
+                self.output_data[trans_name] = self._exec_transform(trans_id, input_data_dict=input_data_dict) 
         return self.output_data
     
-    def get_data(self, out_transforms, explode=False):
+    def get_data(self, out_transforms, explode=False, input_data_dict={}):
         if explode:
             assert len(out_transforms)==1, "To explode data, only one field can be selected"
-            return self._exec_transform(out_transforms[0])
+            return self._exec_transform(out_transforms[0], input_data_dict=input_data_dict)
         return EasyDict({
-            out_trans: self._exec_transform(out_trans)
+            out_trans: self._exec_transform(out_trans, input_data_dict=input_data_dict)
                 for out_trans in out_transforms
         })
         
