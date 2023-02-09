@@ -32,7 +32,10 @@ class BaseExecutor(pl.LightningModule):
         self.dp_config = data_pipeline_config
         self.dp = DataPipeline(self.dp_config)
         self.eval_dp_config = eval_pipeline_config
-        self.eval_pipeline = DataPipeline(self.eval_dp_config)
+        if self.eval_dp_config is not None:
+            self.eval_pipeline = DataPipeline(self.eval_dp_config)
+        else:
+            self.eval_pipeline = None
 
         self.model_config = model_config
         self.optimizer_config = train_config.optimizer_config

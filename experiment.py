@@ -75,7 +75,7 @@ class RunwayExperiment:
     def init_executor(self, mode='train'):
         meta_config = self.config_dict.meta
         dp_config = self.config_dict.data_pipeline
-        eval_pipeline_config = self.config_dict.eval['eval_pipeline_config']
+        eval_pipeline_config = self.config_dict.eval.get('eval_pipeline_config', None)
         executor_config = self.config_dict.executor
         train_config = self.config_dict.train
         test_config = self.config_dict.test
@@ -92,6 +92,7 @@ class RunwayExperiment:
                 model_config=executor_config.model_config,
                 mode='train',
                 train_config=train_config,
+                test_config=test_config,
                 logger=loggers,
                 tokenizer=tokenizer,
                 eval_pipeline_config=eval_pipeline_config,

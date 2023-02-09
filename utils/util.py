@@ -1,4 +1,5 @@
 import transformers
+import torch
 
 def get_tokenizer(tokenizer_config):
     tokenizer_dict = tokenizer_config
@@ -14,4 +15,9 @@ def get_tokenizer(tokenizer_config):
     special_tokens.update(tokenizer_dict.get('special_tokens', {}))
     tokenizer.add_special_tokens(special_tokens)
     return tokenizer
+
+def batch_depad(x, attension_mask=None, pad_len=0):
+    max_in_length = torch.max((~(x==0)).sum(dim=-1))+pad_len
+    attension_mask = attension_mask[:, :max_in_length]
+    return x[:, :max_in_length], attension_mask
 
