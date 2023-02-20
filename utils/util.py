@@ -7,17 +7,16 @@ def get_tokenizer(tokenizer_config):
     tokenizer_class = tokenizer_dict['class_name']
     tokenizer_class_obj = getattr(transformers, tokenizer_class)
     tokenizer = tokenizer_class_obj.from_pretrained(tokenizer_name)
-    special_tokens = {}
     if tokenizer_class[:4] == 'GPT2':
         # special_tokens.update({'pad_token': '[PAD]'})
         tokenizer.pad_token = '[PAD]'
         # tokenizer.pad_token_id = tokenizer.eos_token_id
-    special_tokens.update(tokenizer_dict.get('special_tokens', {}))
-    tokenizer.add_special_tokens(special_tokens)
+    tokenizer.add_tokens(tokenizer_dict.get('additional_tokens', []))
     return tokenizer
 
-def batch_depad(x, attension_mask=None, pad_len=0):
+def batch_depad(x, attension_mask=None, y=None, pad_len=0):
     max_in_length = torch.max((~(x==0)).sum(dim=-1))+pad_len
     attension_mask = attension_mask[:, :max_in_length]
-    return x[:, :max_in_length], attension_mask
+    max_out_length = torch.max((~(y==0)).sum(dim=-1))+pad_len
+    return x[:, :max_in_length], attension_mask, y[:, :max_out_length]
 

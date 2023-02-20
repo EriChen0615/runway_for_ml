@@ -25,6 +25,7 @@ class BaseExecutor(pl.LightningModule):
         test_config={},
         log_file_path=None,
         eval_pipeline_config: DataPipelineConfig=None,
+        global_config=None,
         *args, **kwargs
         ):
         super().__init__()
@@ -62,11 +63,17 @@ class BaseExecutor(pl.LightningModule):
                 self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
             else:
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
+        
+        self.global_config = global_config
 
     
     def _init_model(self, model_config: ModelConfig):
         ModelClass = getattr(globals()[model_config.ModelLib], model_config.ModelClass)
         if model_config.ModelLib == 'transformers': # transformer models
+            if model_config.get('train_from_scratch', None):
+                ConfigClass = getattr(globals()[model_config.ModelLib], model_config.ConfigClass)
+                config_obj = ConfigClass.from_pretrained(model_config.model_version)
+                self.model = ModelClass(config_obj) # init from config
             if model_config.get('checkpoint_path', None):
                 self.model = ModelClass.from_pretrained(
                     model_config.checkpoint_path, 

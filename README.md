@@ -29,6 +29,15 @@ You can define and configure each stage in the configuration file (a jsonnet fil
 
 In this stage, we preprocess our dataset for training and testing. The preprocessing is defined as a directed acyclic graph (i.e., graph with directional edges and no loops), where each node is a functional transform that takes some data and return the processed data.
 
+![Node-level illustration](assets/figures/runway_datapipeline-Node%20Definition.png)
+
+A node in the data pipeline has four important fields that need to be defined in the configuration file:
+
+- **node_name**: the unique identifier of the node. Declared as key
+- **input_node**: the node from which this node takes data from.
+- **transform_name**: name of the data processing functor class in your code.
+- **setup_kwargs**: key-value arguments to be passed into the `.setup()` function when the functor is initialized. 
+
 Except for the first node (with name `load:<node_name>`), all other nodes will take the output of the `input_node` as its input. The node will set up (by calling `setup()`) and call the functor specified (i.e., a callable object, initialized from a class with `__call__` defined) to process the data. 
 
 A pipeline is defined by a dictionary of node declaration, following the format:
@@ -53,7 +62,7 @@ A pipeline is defined by a dictionary of node declaration, following the format:
 
 ## Training and Testing
 
-Training and Testing are handled by `Executor`s. An `Executor` is just a subclass of pytorch-lightning"s `LightningModule`, where we define:
+Training and Testing are handled by `Executor`s. An `Executor` is just a subclass of pytorch-lightning's `LightningModule`, where we define:
 
 1. How to make the train/test/validation dataloaders
 2. How to perform train/test/validation steps
@@ -63,12 +72,13 @@ Training and Testing are handled by `Executor`s. An `Executor` is just a subclas
 
 Runway manages ML research in terms of experiments. An experiment should contain the model checkpoints, as well as all the tests which uses those checkpoints. Runway keeps your experiments organized locally, in the folder structure like following:
 
+```
 - experiments
     - <exp_name1>_V0
     - <exp_name1>_V1
         - train
           - lightning_logs
-              - Version0
+              - Version_XXX
                   - checkpoints
                       - ... ckpt files
         - test-<test_name1>
@@ -78,10 +88,15 @@ Runway manages ML research in terms of experiments. An experiment should contain
         ...
     - <exp_name2>_V0
     ...
+```
+
+Runway provides an automatic versioning system so that experiments with the same name are differentiated with different versions. This is handy during prototyping, but we recommend adopting explicit naming conventions to identify experiments.
 
 ## Evaluation
 
 Evaluation takes the model"s output, run it through the evaluation pipeline to get various metrics and scores. 
+
+Evaluation can be run separately, or automatically after training is done.
 
 
 # How to Use

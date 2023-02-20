@@ -96,10 +96,15 @@ class RunwayExperiment:
                 logger=loggers,
                 tokenizer=tokenizer,
                 eval_pipeline_config=eval_pipeline_config,
+                global_config=self.config_dict,
                 **executor_config.init_kwargs
             )
         elif mode == 'test':
-            load_ckpt_path = self.train_dir / "lightning_logs" / "version_0" / "checkpoints" / test_config['checkpoint_name']
+            def _get_lightning_version(dir_name):
+                for subdir_name in os.listdir(dir_name):
+                    if os.path.isdir(subdir_name):
+                        return subdir_name
+            load_ckpt_path = self.train_dir / "lightning_logs" / _get_lightning_version(self.train_dir/"lighning_logs") / "checkpoints" / test_config['checkpoint_name']
             log_file_path = self.test_dir / 'test_case.txt'
             print("Loading checkpoint at:", load_ckpt_path)
             print("Saving testing results to:", log_file_path)
@@ -140,7 +145,7 @@ class RunwayExperiment:
         self.save_config_to(self.train_dir)
 
         trainer = pl.Trainer(**train_config.get('trainer_paras', {}), default_root_dir=self.train_dir ,callbacks=[checkpoint_callback])
-        trainer.fit(self.rw_executor)
+        trainer.fit(self.rw_executor, **train_config.get('trainer_fit_paras', {}))
     
     def test(self):
         test_config = self.config_dict.test

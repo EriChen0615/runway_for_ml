@@ -63,7 +63,7 @@ class DataPipeline(DummyBase):
 
         # Initialize functor
         func = DataTransform_Registry[trans_info.transform_name]()
-        func.setup(**trans_info.setup_kwargs)
+        func.setup(**trans_info.get("setup_kwargs", {}))
 
 
         # Get input_data

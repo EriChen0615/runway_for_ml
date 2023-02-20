@@ -1,5 +1,6 @@
 from easydict import EasyDict
 from ..utils.global_variables import register_to, register_func_to_registry, DataTransform_Registry
+from ..utils.util import get_tokenizer
 from transformers import AutoTokenizer
 import transformers
 import copy
@@ -171,9 +172,7 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
     def setup(self, rename_col_dict, tokenizer_config: EasyDict, tokenize_fields_list: List):
         super().setup(rename_col_dict)
         self.tokenize_fields_list = tokenize_fields_list
-        self.version_name = tokenizer_config.version_name
-        self.class_name = tokenizer_config.class_name
-        self.special_tokens = tokenizer_config.get('special_tokens', {})
+        self.tokenizer = get_tokenizer(tokenizer_config)
         self.tokenize_kwargs = tokenizer_config.get(
             'tokenize_kwargs', 
             {
@@ -183,13 +182,6 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
              'truncation': True
              }
         )
-
-        TokenizerClass = getattr(transformers, self.class_name)
-        self.tokenizer = TokenizerClass.from_pretrained(self.version_name)
-
-        if self.class_name[:4] == 'GPT2':
-            self.tokenizer.pad_token = '[PAD]'
-        self.tokenizer.add_special_tokens(self.special_tokens)
 
     def _call(self, dataset):
         results = {}
