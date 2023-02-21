@@ -23,6 +23,7 @@ class BaseExecutor(pl.LightningModule):
         mode, # train/infer/eval
         train_config={},
         test_config={},
+        input_data_node=None,
         log_file_path=None,
         eval_pipeline_config: DataPipelineConfig=None,
         global_config=None,
@@ -63,10 +64,22 @@ class BaseExecutor(pl.LightningModule):
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
         
         self.global_config = global_config
+        self.input_data_node = input_data_node
         self.save_hyperparameters()
 
     
     def _init_model(self, model_config: ModelConfig):
+        """Initialize self.model with model_config. 
+        Initialization procedure depends on which `ModelLib` is used.
+        Implementation available for
+        - transformers (using `from_pretrained`)
+
+        Args:
+            model_config (ModelConfig): model configurations
+
+        Raises:
+            NotImplementedError: Raise error when the `ModelLib` is not supported.
+        """
         ModelClass = getattr(globals()[model_config.ModelLib], model_config.ModelClass)
         if model_config.ModelLib == 'transformers': # transformer models
             if model_config.get('train_from_scratch', None):
@@ -94,8 +107,9 @@ class BaseExecutor(pl.LightningModule):
             raise NotImplementedError('The _init_model() method is not defined for library ' + model_config.ModelLib)
     
     def prepare_data(self):
-        # self.dp.apply_transforms()
-        pass
+        if self.input_data_node:
+            self.prepared_data = self.dp.get_data([self.input_data_node], explode=True)
+
     
     def setup(self, stage):
         """
