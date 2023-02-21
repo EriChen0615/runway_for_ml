@@ -29,7 +29,6 @@ class BaseExecutor(pl.LightningModule):
         *args, **kwargs
         ):
         super().__init__()
-        self.save_hyperparameters()
         self.dp_config = data_pipeline_config
         self.dp = DataPipeline(self.dp_config)
         self.eval_dp_config = eval_pipeline_config
@@ -51,7 +50,6 @@ class BaseExecutor(pl.LightningModule):
         self.valid_cnt = 0
 
         self._init_model(self.model_config)
-        self.save_hyperparameters()
 
         self.use_wandb = False
         for trainer_logger in kwargs.get('logger', []):
@@ -65,6 +63,7 @@ class BaseExecutor(pl.LightningModule):
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
         
         self.global_config = global_config
+        self.save_hyperparameters()
 
     
     def _init_model(self, model_config: ModelConfig):

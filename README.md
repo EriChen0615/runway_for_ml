@@ -143,7 +143,7 @@ To obtain the skeleton of a Runway project:
 
 ## Data Preprocessing 
 
-### Writing data ops (data transforms) to preprocess data
+### Writing codes for data ops (data transforms) to preprocess data
 
 You should define your data transform functor under `src/data_ops/`. To define a functor that can be used by runway, you need to:
 
@@ -252,132 +252,100 @@ You can run the data pipeline in the commandline.
 python src/main.py \
     --experiment_name "test_run" \
     --config "configs/test_run.jsonnet" \
-    --opts \
-    test.batch_size=16 \
-    test.load_model_path=/path/to/here
+    --mode "prepare_data" \
 ```
 
 For use of CLI, refer to [detailed manual of command line](#command-line-manual)
 
 ## Training & Testing 
 
-Runway is organized in *experiments*. Each experiment corresponds to one trained model and possibly multiple inferences/evaluations. 
+### Coding up Executors
 
-To begin training, you will need to:
+An executor must implement the following functions:
 
-1. Create an experiment configuration file using `runway-experiment <exp_name>`
-2. Run training using `runway-train <exp_name>`
+- `configure_optimizers()`: return the optimizer and the scheduler
+- `setup()`: create self.train_dataset, self.test_dataset and self.val_dataset available
+- `training_step()`
+- `test_step()`
+- `validation_step()`
+
+Optionally, it can implement/overwrite:
+
+- `train_dataloader()`
+- `test_dataloader()`
+- `val_dataloader()`
+- `prepare_data()`
+- other functions defined in `LightningModule` [Documentation here](https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_module.html)
 
 
-You can initialize a new experiment from existing ones, using `runway-experiment <exp_name> --from <existing_exp_name>`. The experiment configuration file will be cloned.
+### Training
 
-The two steps can be combined into one if you just want to change a few parameters of an existing experiment: `runway-train <exp_name> --from <existing_exp_name> --opts <param=value> ...`
+Run `main.py` and pass `--mode "train"` to start training.
+
+```bash
+python src/main.py \
+    --experiment_name $EXPERIMENT_NAME \
+    --config "configs/da-t5-bos.jsonnet" \
+    --mode "train" \
+    --opts \
+    meta.logger_enable="[\"tensorboard\", \"wandb\"]" \
+    train.batch_size=8 \
+    train.trainer_paras.max_epochs=10 \
+    train.trainer_paras.accelerator="gpu" \
+    train.trainer_paras.devices=1 \
+    train.trainer_paras.log_every_n_steps=50 \
+    executor.init_kwargs.use_data_node=output:T5-T2G2Tokenize \
+    executor.model_config.use_pretrained_base=False \
+    executor.model_config.use_pretrained_encoder=False \
+    executor.model_config.base_model_class=NAR_T5 \
+```
+
+> You can also use `--opts` to override configurations, or use `--config <config_file>` to specify the configuration file to use for inference.
+
 
 ## Inference & Evaluation
 
-To run **inference**, you will need to specify an existing experiment with trained models. This can be done by `runway-infer <exp_name> <infer_suffix>`, where `<infer_suffix>` will be appended to `<exp_name>` to identify an inference run. 
+To run **inference**, you will need to specify the following:
+- `experiment_name`: experiment name from which the model was trained (excluding version)
+- `mode` = "test"
+- `test_suffix`: A descriptive suffix. The results will be saved to a folder named as `test-<test_suffix>` under the same experiment. 
+- `exp_version`: version number
+- `test.checkpoint_name`: name of the checkpoint (only the .ckpt filename)
 
-You can also use `--opts` to override configurations, or use `--config <config_file>` to specify the configuration file to use for inference.
-
-By default, evaluation will be run together with the inference. If you want to run evaluation separately, you can use `runway-eval <infer_run_name> --opts ...`
-
-## Train/Infer/Evaluate in One Command
-
-Runway provides a helper command that combines the above steps: `runway-run <exp_name> --from <existing_exp_name> --opts ...`. This will sequentially call `runway-train` and `runway-infer`. 
-
-# Development Manual
-
-Runway provides a framework to separate **data**, **modeling**, **training/inference**, and **evaluation**.
-
-## Data
-
-### Overview
-
-Data are read and processed in *Data Pipeline*. A *data pipeline* is a set of inter-connected *data transform*. A *data transform* is a configurable, functional (i.e., stateless) unit that takes in some data, transform and then return it. 
-
-### Data Transform
-
-A *data transform* is implemented as a functor that is a subclass of *runway_for_ml.BaseTransform* that implements the `setup()` and the `_call()` function. You also need to register the transform with the `@register_transform_functor` decorator so that runway can use it. A declaration example is:
-
-```python
-@register_transform_functor
-class LinearizeDialogActsTransform(HFDatasetTransform):
-    def setup(self, ...):
-        pass
-
-    def _call(self, data):
-        ...
-        return 
+Example for testing.
+```bash
+# Test NVS Bert
+python src/main.py \
+    --experiment_name "NVSBert-SGD-p=100-k=200-b=8-lr=6e-3" \
+    --config "configs/experiments/nvs-bert.jsonnet" \
+    --mode "test" \
+    --opts \
+    test_suffix="ep=4" \
+    exp_version="1" \
+    meta.logger_enable=["csv"] \
+    test.checkpoint_name="epoch=4-step=103115.ckpt" \
+    test.batch_size=64 \
+    test.trainer_paras.accelerator="gpu" \
+    test.trainer_paras.devices=1
 ```
 
-Note that 
-1. the `setup()` function configures the functor
-2. the `_call()` function performs the actual transformation
+To run **evaluation**, you will need to specify the following:
+- `experiment_name`: experiment name from which the model was trained (excluding version)
+- `mode` = "eval"
+- `test_suffix`: A descriptive suffix. The results will be saved to a folder named as `test-<test_suffix>` under the same experiment. 
+- `exp_version`: version number
+- `test.checkpoint_name`: name of the checkpoint (only the .ckpt filename)
 
-You can override the following methods in the functor to implement your data transform:
-
-- `_call(self, data)`: the argument lists depends on your superclass. The data processing logic should reside here.
-- `_preprocess(self, data)`: preprocess data for transform. Can be used to handle edge cases/unify interfaces etc.
-- `setup(self, *args, **kwargs)`: where the functor is configured. E.g., changing transform parameters.
-- `_check_input(self, data)`: optional input checking
-- `_check_output(self, data)`: optional output checking
-- `_apply_mapping(self, data, in_out_col_mapping)`: this enables data field selection. May be defined in superclass.
-
-
-We provide a list of ready-to-use transforms. See documentation for the full list. 
-
-### Data Pipeline
-
-
-
-```json
-transforms: {
-    "input:LoadSGDData": {
-      transform_name: "LoadHFDataset",
-      setup_kwargs: {
-        dataset_path: "gem",
-        dataset_name: "schema_guided_dialog",
-      },
-    },
-    "process:Linearize": {
-      input_node: "input:LoadSGDData",
-      transform_name: "LinearizeDialogActsTransform",
-      setup_kwargs: {
-        linearizer_class: "SGD_TemplateGuidedLinearizer",
-        schema_paths: [
-          "data/schemas/train/schema.json",
-          "data/schemas/test/schema.json",
-          "data/schemas/dev/schema.json",
-        ],
-        sgd_data_dir: "data/dstc8-schema-guided-dialogue",
-        template_dir: "data/utterance_templates"
-      },
-      regenerate: false,
-      cache: true,
-      inspect: true,
-    },
-    "output:T5-Tokenize": {
-      input_node: "process:Linearize",
-      transform_name: "HFDatasetTokenizeTransform",
-      setup_kwargs: {
-        rename_col_dict: {
-          "target_input_ids": "labels",
-          "target_attention_mask": "output_mask",
-          "_linearized_input_ids": "input_ids",
-          "_linearized_attention_mask": "attention_mask",
-        },
-        tokenizer_config: T5TokenizerConfig,
-        tokenize_fields_list: ["target", "_linearized"],
-      },
-      regenerate: false,
-      cache: true,
-      inspect: true,
-    },
-  },
+Example for evaluation.
+```bash
+python src/main.py \
+    --experiment_name "test_run-b8" \
+    --config "configs/test_run.jsonnet" \
+    --mode "eval" \
+    --opts \
+    test_suffix="ep=4;beam=4;p=0.1" \
+    exp_version="0"
 ```
-
-
-## Modeling
 
 
 # Appendix
