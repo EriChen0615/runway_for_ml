@@ -65,14 +65,21 @@ class DataPipeline(DummyBase):
         func = DataTransform_Registry[trans_info.transform_name]()
         func.setup(**trans_info.get("setup_kwargs", {}))
 
-
-        # Get input_data
+        print(trans_info)
+        print(input_data_dict.keys())
+        # Get input_data from all input nodes
         input_data = None
-        if trans_id not in input_data_dict \
-        and trans_type != "input" \
-        and trans_info['input_node']:
-            input_trans_id = trans_info['input_node']
-            input_data = self._exec_transform(input_trans_id, input_data_dict=input_data_dict)
+        if trans_id not in input_data_dict and trans_info.get('input_node', None):
+            input_trans_ids = trans_info['input_node']
+            if not isinstance(input_trans_ids, List):
+                # for single node input
+                input_trans_id = input_trans_ids
+                input_data = self._exec_transform(input_trans_id, input_data_dict=input_data_dict)
+            else:
+                input_data = [
+                    self._exec_transform(input_trans_id, input_data_dict=input_data_dict)
+                    for input_trans_id in input_trans_ids
+                ]
         elif trans_id in input_data_dict: # directly specify input_data using the input_data_dict dictionary
             input_data = input_data_dict[trans_id]
         else:
@@ -84,7 +91,7 @@ class DataPipeline(DummyBase):
             self.inspect_transform_before(trans_id, self.transforms[trans_id], input_data)
 
         print("Node:", trans_id, "\nExecute Transform:", trans_info.transform_name)
-
+        
         output = func(input_data)
     
         if hasattr(self, 'inspect_transform_before') and self.transforms[trans_id].get('inspect', True): # inspector function
