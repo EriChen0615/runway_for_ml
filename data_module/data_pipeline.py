@@ -15,6 +15,7 @@ class DataPipeline(DummyBase):
     def __init__(
         self, 
         config: DataPipelineConfig,
+        global_config=None,
         ):
         self.config = config
 
@@ -32,6 +33,7 @@ class DataPipeline(DummyBase):
 
         # convenient variables
         self.input_transform_ids = [trans_id for trans_id in self.transforms]
+        self.global_config = global_config # pass global config in, so that the transform knows the global setting
     
     def _read_from_cache(self, trans_id):
         data = load_data_from_disk(trans_id, self.cache_dir)
@@ -63,7 +65,7 @@ class DataPipeline(DummyBase):
 
         # Initialize functor
         func = DataTransform_Registry[trans_info.transform_name]()
-        func.setup(**trans_info.get("setup_kwargs", {}))
+        func.setup(**trans_info.get("setup_kwargs", {}), global_config=self.global_config)
 
         print(trans_info)
         print(input_data_dict.keys())
@@ -92,9 +94,9 @@ class DataPipeline(DummyBase):
 
         print("Node:", trans_id, "\nExecute Transform:", trans_info.transform_name)
         
-        output = func(input_data)
+        output = func(input_data) 
     
-        if hasattr(self, 'inspect_transform_before') and self.transforms[trans_id].get('inspect', True): # inspector function
+        if hasattr(self, 'inspect_transform_after') and self.transforms[trans_id].get('inspect', True): # inspector function
             self.inspect_transform_after(trans_id, self.transforms[trans_id], output)
 
         # Cache data if appropriate

@@ -31,7 +31,7 @@ class BaseExecutor(pl.LightningModule):
         ):
         super().__init__()
         self.dp_config = data_pipeline_config
-        self.dp = DataPipeline(self.dp_config)
+        self.dp = DataPipeline(self.dp_config, global_config=global_config)
         self.eval_dp_config = eval_pipeline_config
         if self.eval_dp_config is not None:
             self.eval_pipeline = DataPipeline(self.eval_dp_config)
