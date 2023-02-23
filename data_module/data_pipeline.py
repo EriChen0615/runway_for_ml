@@ -113,6 +113,7 @@ class DataPipeline(DummyBase):
         return self.output_data
     
     def get_data(self, out_transforms, explode=False, input_data_dict={}):
+        print(out_transforms, explode)
         if explode:
             assert len(out_transforms)==1, "To explode data, only one field can be selected"
             return self._exec_transform(out_transforms[0], input_data_dict=input_data_dict)

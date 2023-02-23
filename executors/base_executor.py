@@ -23,7 +23,7 @@ class BaseExecutor(pl.LightningModule):
         mode, # train/infer/eval
         train_config={},
         test_config={},
-        input_data_node=None,
+        use_data_node=None,
         log_file_path=None,
         eval_pipeline_config: DataPipelineConfig=None,
         global_config=None,
@@ -50,6 +50,10 @@ class BaseExecutor(pl.LightningModule):
         self.test_cnt = 0
         self.valid_cnt = 0
 
+        self.global_config = global_config
+        self.config = global_config # Easier to use
+        self.use_data_node = use_data_node
+        
         self._init_model(self.model_config)
 
         self.use_wandb = False
@@ -63,8 +67,7 @@ class BaseExecutor(pl.LightningModule):
             else:
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
         
-        self.global_config = global_config
-        self.input_data_node = input_data_node
+        
         self.save_hyperparameters()
 
     
@@ -107,8 +110,8 @@ class BaseExecutor(pl.LightningModule):
             raise NotImplementedError('The _init_model() method is not defined for library ' + model_config.ModelLib)
     
     def prepare_data(self):
-        if self.input_data_node:
-            self.prepared_data = self.dp.get_data([self.input_data_node], explode=True)
+        if self.use_data_node:
+            self.prepared_data = self.dp.get_data([self.use_data_node], explode=True)
 
     
     def setup(self, stage):
@@ -116,49 +119,124 @@ class BaseExecutor(pl.LightningModule):
         Set up self.train_dataset, self.test_dataset and self.val_dataset etc.
         """
         pass
-        
-    
+
     def configure_optimizers(self):
         """
         Return optimizers and schedulers
         """
+        optimization_parameters = [
+            {
+                'params': [p for n, p in self.model.named_parameters()],
+                'lr': self.config.train.lr,
+                'initial_lr': self.config.train.lr,
+            },
+        ]
+        
+        for group in optimization_parameters:
+            logger.info('#params: {}   lr: {}'.format(len(group['params']), group['lr']))
+        
+        """define optimizer"""
         optimizer_name = self.optimizer_config['optimizer_name']
         optimizer_params = self.optimizer_config.get('optimizer_params', {})
         if optimizer_name == 'AdamW':
-            optimizer = AdamW(self.parameters(), **optimizer_params)
+            self.optimizer = AdamW(optimization_parameters, **optimizer_params)
         elif optimizer_name == 'Adafactor':
-            optimizer = Adafactor(self.parameters(), **optimizer_params)
+            self.optimizer = Adafactor(optimization_parameters, **optimizer_params)
         elif optimizer_name == 'Adam':
-            optimizer = Adam(self.parameters(), **optimizer_params)
+            self.optimizer = Adam(optimization_parameters, **optimizer_params)
         else:
             raise ValueError(f"Invaild optimizer name: {optimizer_name}")
         
-        #TODO add learning rate scheduler
-        return optimizer
+        num_warmup_steps = self.optimizer_config.get('scheduler_params', {}).get('num_warmup_steps', 0)
+        if self.optimizer_config.scheduler == 'linear':
+            from transformers import get_linear_schedule_with_warmup
+            # Using Linear scheduler
+            self.scheduler = get_linear_schedule_with_warmup(
+                self.optimizer,
+                num_warmup_steps=num_warmup_steps,
+                num_training_steps=self.trainer.estimated_stepping_batches,
+                last_epoch=self.global_step,
+            )
+        elif self.config.train.scheduler == 'cosine':
+            t_total = self.training_config.trainer_paras.max_epochs
+            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, 
+                            t_total, eta_min=1e-5, last_epoch=-1, verbose=False)
+        else:
+            from transformers import get_constant_schedule_with_warmup
+            # Using constant scheduler
+            self.scheduler = get_constant_schedule_with_warmup(
+                self.optimizer,
+                num_warmup_steps=num_warmup_steps,
+                last_epoch=self.global_step,
+            )
+        
+        return {
+            'optimizer': self.optimizer,
+            'lr_scheduler': {
+                # REQUIRED: The scheduler instance
+                "scheduler": self.scheduler,
+                # The unit of the scheduler's step size, could also be 'step'.
+                # 'epoch' updates the scheduler on epoch end whereas 'step'
+                # updates it after a optimizer update.
+                "interval": "step",
+                # How many epochs/steps should pass between calls to
+                # `scheduler.step()`. 1 corresponds to updating the learning
+                # rate after every epoch/step.
+                "frequency": 1,
+                # If using the `LearningRateMonitor` callback to monitor the
+                # learning rate progress, this keyword can be used to specify
+                # a custom logged name
+                "name": None,
+            }
+        }
+
+    # def train_dataloader(self):
+    #     return DataLoader(
+    #         self.train_dataset,
+    #         shuffle=True,
+    #         batch_size=self.training_config['batch_size'],
+    #         num_workers=self.training_config.get('dataloader_workers', 8)
+    #     )
+
+    # def val_dataloader(self):
+    #     return DataLoader(
+    #         self.val_dataset,
+    #         shuffle=False,
+    #         batch_size=self.training_config['batch_size'],
+    #         num_workers=self.training_config.get('dataloader_workers', 8)
+    #     )
+    
+    # def test_dataloader(self):
+    #     return DataLoader(
+    #         self.test_dataset,
+    #         shuffle=False,
+    #         batch_size=self.test_config['batch_size'],
+    #         num_workers=self.test_config.get('dataloader_workers', 8)
+    #     )
 
     def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset,
-            shuffle=True,
-            batch_size=self.training_config['batch_size'],
-            num_workers=self.training_config.get('dataloader_workers', 8)
-        )
-
+        self.train_dataloader_names = list(self.data_loader.data_loaders['train'].keys())
+        
+        # TODO: we only allow one train data loader at the moment
+        return self.train_dataloaders[0]
+    
     def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset,
-            shuffle=False,
-            batch_size=self.training_config['batch_size'],
-            num_workers=self.training_config.get('dataloader_workers', 8)
-        )
+        self.val_dataloader_names = list(self.data_loader.data_loaders['valid'].keys())
+
+        return self.valid_dataloaders
     
     def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset,
-            shuffle=False,
-            batch_size=self.test_config['batch_size'],
-            num_workers=self.test_config.get('dataloader_workers', 8)
-        )
+        self.test_dataloader_names = list(self.data_loader.data_loaders['test'].keys())
+        
+        return self.test_dataloaders
+
+
+    def on_exception(self, trainer, pl_module, exception):
+        # handle exception
+        if self.wandb_logger and trainer.is_global_zero:
+            if self.wandb_logger.experiment is not None:
+                logger.error(f"Attempting to stop the wandb run {self.wandb_logger.experiment}")
+                self.wandb_logger.experiment.finish()
     
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)

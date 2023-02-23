@@ -77,24 +77,26 @@ class RunwayExperiment:
         dp_config = self.config_dict.data_pipeline
         eval_pipeline_config = self.config_dict.eval.get('eval_pipeline_config', None)
         executor_config = self.config_dict.executor
+        model_config = self.config_dict.model_config
         train_config = self.config_dict.train
         test_config = self.config_dict.test
 
         loggers = self.init_loggers(mode=mode) # initialize loggers
         print(loggers)
 
-        tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config)
+        # NOTE: Tokenizer should not by default be initialised.
+        # tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config)
 
         rw_executor = None
         if mode == 'train':
             rw_executor = Executor_Registry[executor_config.ExecutorClass](
                 data_pipeline_config=dp_config,
-                model_config=executor_config.model_config,
+                model_config=model_config,
                 mode='train',
                 train_config=train_config,
                 test_config=test_config,
                 logger=loggers,
-                tokenizer=tokenizer,
+                # tokenizer=tokenizer,
                 eval_pipeline_config=eval_pipeline_config,
                 global_config=self.config_dict,
                 **executor_config.init_kwargs
@@ -111,12 +113,12 @@ class RunwayExperiment:
             rw_executor = Executor_Registry[executor_config.ExecutorClass].load_from_checkpoint(
                 load_ckpt_path,
                 data_pipeline_config=dp_config,
-                model_config=executor_config.model_config,
+                model_config=model_config,
                 mode='test',
                 test_config=test_config,
                 logger=loggers,
                 log_file_path=log_file_path,
-                tokenizer=tokenizer,
+                # tokenizer=tokenizer,
                 **executor_config.init_kwargs
             )
         return rw_executor
