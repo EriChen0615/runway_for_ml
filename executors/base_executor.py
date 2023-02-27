@@ -9,6 +9,7 @@ from transformers import AdamW, Adafactor, get_scheduler
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+from utils.metrics_log_callback import MetricsHistoryLogger
 import logging
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class BaseExecutor(pl.LightningModule):
             self.eval_pipeline = None
 
         self.model_config = model_config
-        self.optimizer_config = train_config.optimizer_config
+        self.optimizer_config = train_config.get('optimizer_config', None)
         self.training_config = train_config
         self.test_config = test_config
         self.additional_kwargs = model_config.get("additional_kwargs", {})
@@ -118,17 +119,30 @@ class BaseExecutor(pl.LightningModule):
         """
         Set up self.train_dataset, self.test_dataset and self.val_dataset etc.
         """
-        pass
+        for trainer_logger in self.trainer.loggers:
+            if type(trainer_logger) == TensorBoardLogger:
+                self.tb_logger = trainer_logger
+            elif type(trainer_logger) == WandbLogger:
+                self.wandb_logger = trainer_logger
+                self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
+            elif type(trainer_logger) == MetricsHistoryLogger:
+                self.metrics_history_logger = trainer_logger
+            else:
+                logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
+        
 
     def configure_optimizers(self):
         """
         Return optimizers and schedulers
         """
+        optimizer_name = self.optimizer_config['optimizer_name']
+        optimizer_params = self.optimizer_config.get('optimizer_params', {})
+
         optimization_parameters = [
             {
                 'params': [p for n, p in self.model.named_parameters()],
-                'lr': self.config.train.lr,
-                'initial_lr': self.config.train.lr,
+                'lr': optimizer_params.lr,
+                'initial_lr': optimizer_params.lr,
             },
         ]
         
@@ -136,8 +150,7 @@ class BaseExecutor(pl.LightningModule):
             logger.info('#params: {}   lr: {}'.format(len(group['params']), group['lr']))
         
         """define optimizer"""
-        optimizer_name = self.optimizer_config['optimizer_name']
-        optimizer_params = self.optimizer_config.get('optimizer_params', {})
+        
         if optimizer_name == 'AdamW':
             self.optimizer = AdamW(optimization_parameters, **optimizer_params)
         elif optimizer_name == 'Adafactor':
@@ -157,7 +170,7 @@ class BaseExecutor(pl.LightningModule):
                 num_training_steps=self.trainer.estimated_stepping_batches,
                 last_epoch=self.global_step,
             )
-        elif self.config.train.scheduler == 'cosine':
+        elif self.optimizer_config.scheduler == 'cosine':
             t_total = self.training_config.trainer_paras.max_epochs
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, 
                             t_total, eta_min=1e-5, last_epoch=-1, verbose=False)
@@ -215,18 +228,18 @@ class BaseExecutor(pl.LightningModule):
     #     )
 
     def train_dataloader(self):
-        self.train_dataloader_names = list(self.data_loader.data_loaders['train'].keys())
+        self.train_dataloader_names = list(self.data_loaders['train'].keys())
         
         # TODO: we only allow one train data loader at the moment
         return self.train_dataloaders[0]
     
     def val_dataloader(self):
-        self.val_dataloader_names = list(self.data_loader.data_loaders['valid'].keys())
+        self.val_dataloader_names = list(self.data_loaders['valid'].keys())
 
         return self.valid_dataloaders
     
     def test_dataloader(self):
-        self.test_dataloader_names = list(self.data_loader.data_loaders['test'].keys())
+        self.test_dataloader_names = list(self.data_loaders['test'].keys())
         
         return self.test_dataloaders
 

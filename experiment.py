@@ -3,10 +3,12 @@ Experiment System:
     - Manage experiment hierarchy, versioning, etc.
 """
 import os
+import sys
 from pathlib import Path
 from .utils.global_variables import Executor_Registry, DataTransform_Registry
 from .utils import config_system as rw_conf
 from .utils import util 
+from .utils.dirs import *
 from .configs import configuration as rw_cfg
 from .data_module.data_pipeline import DataPipeline 
 
@@ -14,9 +16,19 @@ from .data_module.data_pipeline import DataPipeline
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning import Trainer, seed_everything
+from utils.seed import set_seed
 from easydict import EasyDict
 import json
 import pandas as pd
+import wandb
+import glob
+
+import logging
+from logging.handlers import RotatingFileHandler
+from logging import Formatter
+logger = logging.getLogger(__name__)
+
 
 class RunwayExperiment:
     def __init__(self, config_dict, root_dir=None):
@@ -31,12 +43,29 @@ class RunwayExperiment:
         self.exp_dir = None
 
         self.rw_executor = None
+
+        # whether to use versioning in saving experiments
+        self.use_versioning = config_dict.meta.get('use_versioning', True)
+
+        # Important: set seed!
+        if config_dict.meta.seed:
+            set_seed(config_dict.meta.seed)
+            seed_everything(config_dict.meta.seed, workers=True)
+            # sets seeds for numpy, torch and python.random.
+            logger.info(f'All seeds have been set to {config_dict.meta.seed}')
+    
+
     
     def _make_exp_full_name(self, exp_name, ver_num, tag):
-        if tag is None:
-            return f"{exp_name}_V{ver_num}"
-        else:
-            return f"{exp_name}_V{ver_num}_tag:{tag}"
+        full_name = f"{exp_name}"
+
+        if self.use_versioning:
+            full_name = f"{full_name}_V{ver_num}"
+        
+        if tag is not None:
+            full_name = f"{full_name}_tag:{tag}"
+        
+        return full_name
 
     def _make_experiment_dir(self, root_exp_dir, exp_name, ver_num, tag):
         self.exp_full_name = self._make_exp_full_name(exp_name, ver_num, tag)
@@ -64,13 +93,81 @@ class RunwayExperiment:
                 loggers.append(tb_logger)
             elif logger_type == 'wandb':
                 assert "WANDB" in self.meta_conf, "WANDB configuration missing in config file, but wandb_logger is used"
+                config = self.config_dict
                 wandb_conf = self.meta_conf["WANDB"]
+
+                # setup wandb
+                WANDB_CACHE_DIR = wandb_conf.pop('CACHE_DIR')
+                if WANDB_CACHE_DIR:
+                    os.environ['WANDB_CACHE_DIR'] = WANDB_CACHE_DIR
+                
+                # add base_model as a tag
+                wandb_conf.tags.append(self.config_dict.model_config.base_model)
+                # add modules as tags
+                wandb_conf.tags.extend(self.config_dict.model_config.modules)
+
+                logger.info('init wandb logger with the following settings: {}'.format(wandb_conf))
+
                 wandb_logger = pl_loggers.WandbLogger(
-                    name=self.exp_full_name,
-                    project=wandb_conf['PROJECT_NAME'],
+                    name=self.exp_full_name, config=config, **wandb_conf
                 )
                 loggers.append(wandb_logger)
+            elif logger_type == 'metrics_history':
+                from utils.metrics_log_callback import MetricsHistoryLogger
+                metrics_history_logger = MetricsHistoryLogger()
+                loggers.append(metrics_history_logger)
+
         return loggers
+
+    def setup_sys_logs(self, log_path):
+
+        if not os.path.exists(log_path):
+            create_dirs([log_path])
+        # ====== Set Logger =====
+        log_file_format = "[%(levelname)s] - %(asctime)s - %(name)s : %(message)s (in %(pathname)s:%(lineno)d)"
+        log_console_format = "[%(levelname)s] - %(name)s : %(message)s"
+
+        # Main logger
+        main_logger = logging.getLogger()
+        main_logger.setLevel(logging.DEBUG)
+
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(Formatter(log_console_format))
+        from utils.color_logging import CustomFormatter
+        custom_output_formatter = CustomFormatter(custom_format=log_console_format)
+        console_handler.setFormatter(custom_output_formatter)
+
+        info_file_handler = RotatingFileHandler(os.path.join(log_path, 'info.log'), maxBytes=10 ** 6,
+                                                backupCount=5)
+        info_file_handler.setLevel(logging.INFO)
+        info_file_handler.setFormatter(Formatter(log_file_format))
+
+        exp_file_handler = RotatingFileHandler(os.path.join(log_path, 'debug.log'), maxBytes=10 ** 6, backupCount=5)
+        exp_file_handler.setLevel(logging.DEBUG)
+        exp_file_handler.setFormatter(Formatter(log_file_format))
+
+        exp_errors_file_handler = RotatingFileHandler(os.path.join(log_path, 'error.log'), maxBytes=10 ** 6,
+                                                        backupCount=5)
+        exp_errors_file_handler.setLevel(logging.WARNING)
+        exp_errors_file_handler.setFormatter(Formatter(log_file_format))
+
+        main_logger.addHandler(console_handler)
+        main_logger.addHandler(info_file_handler)
+        main_logger.addHandler(exp_file_handler)
+        main_logger.addHandler(exp_errors_file_handler)
+
+        # setup a hook to log unhandled exceptions
+        def handle_exception(exc_type, exc_value, exc_traceback):
+            if issubclass(exc_type, KeyboardInterrupt):
+                if wandb.run is not None:
+                    logger.error(f"Attempting to stop the wandb run {wandb.run}")
+                    wandb.finish() # stop wandb if keyboard interrupt is raised
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                
+            logger.error(f"Uncaught exception: {exc_type} --> {exc_value}", exc_info=(exc_type, exc_value, exc_traceback))
+            
+        sys.excepthook = handle_exception
     
     def init_executor(self, mode='train'):
         meta_config = self.config_dict.meta
@@ -81,8 +178,8 @@ class RunwayExperiment:
         train_config = self.config_dict.train
         test_config = self.config_dict.test
 
-        loggers = self.init_loggers(mode=mode) # initialize loggers
-        print(loggers)
+        self.loggers = self.init_loggers(mode=mode) # initialize loggers
+        print(self.loggers)
 
         # NOTE: Tokenizer should not by default be initialised.
         # tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config)
@@ -95,7 +192,6 @@ class RunwayExperiment:
                 mode='train',
                 train_config=train_config,
                 test_config=test_config,
-                logger=loggers,
                 # tokenizer=tokenizer,
                 eval_pipeline_config=eval_pipeline_config,
                 global_config=self.config_dict,
@@ -106,19 +202,18 @@ class RunwayExperiment:
                 for subdir_name in os.listdir(dir_name):
                     if os.path.isdir(subdir_name):
                         return subdir_name
-            load_ckpt_path = self.train_dir / "lightning_logs" / _get_lightning_version(self.train_dir/"lighning_logs") / "checkpoints" / test_config['checkpoint_name']
+            # load_ckpt_path = self.train_dir / "lightning_logs" / _get_lightning_version(self.train_dir/"lighning_logs") / "checkpoints" / test_config['checkpoint_name']
             log_file_path = self.test_dir / 'test_case.txt'
-            print("Loading checkpoint at:", load_ckpt_path)
+            # print("Loading checkpoint at:", load_ckpt_path)
             print("Saving testing results to:", log_file_path)
-            rw_executor = Executor_Registry[executor_config.ExecutorClass].load_from_checkpoint(
-                load_ckpt_path,
+            rw_executor = Executor_Registry[executor_config.ExecutorClass](
                 data_pipeline_config=dp_config,
                 model_config=model_config,
                 mode='test',
                 test_config=test_config,
-                logger=loggers,
                 log_file_path=log_file_path,
                 # tokenizer=tokenizer,
+                global_config=self.config_dict,
                 **executor_config.init_kwargs
             )
         return rw_executor
@@ -128,43 +223,196 @@ class RunwayExperiment:
             os.makedirs(dir_path)
         file_path = dir_path / 'config.json'
         with open(file_path, 'w') as f:
-            json.dump(self.config_dict, f)
+            json.dump(self.config_dict, f, indent=4) # Added some indents to prettify the output
 
     def train(self):
         train_config = self.config_dict.train
 
         self.ver_num = 0
         self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
-        self._check_version_and_update_exp_dir()
+        
+        if self.use_versioning:
+            self._check_version_and_update_exp_dir()
+        
+        # Reset the experiment (only used for training)
+        delete_confirm = 'n'
+        config = self.config_dict
+        if config.reset and config.mode == "train":
+            dirs = [self.exp_dir]
+            # Reset all the folders
+            print("You are deleting following dirs: ", dirs, "input y to continue")
+            if config.args.override:
+                delete_confirm = 'y'
+            else:
+                delete_confirm = input()
+            if delete_confirm == 'y':
+                for dir in dirs:
+                    try:
+                        delete_dir(dir)
+                    except Exception as e:
+                        print(e)
+            else:
+                print("reset cancelled.")
+        
+        
+
+
         self.config_dict['exp_version'] = self.ver_num
 
         self.train_dir = self.exp_dir / 'train'
         self.train_log_dir = self.train_dir / 'logs'
+        self.ckpt_dir = self.train_dir / 'saved_models'
+        
+        self.setup_sys_logs(self.train_log_dir)
+
+        # Save some frequently-used paths to config
+        self.config_dict.train_dir = str(self.train_dir)
+        self.config_dict.log_dir = str(self.train_log_dir)
+        self.config_dict.ckpt_dir = str(self.ckpt_dir)
+
+        ## Delete wandb logs if wandb is enabled
+        if 'wandb' in self.meta_conf['logger_enable']:
+            wandb_conf = self.config_dict.meta.WANDB
+            config = self.config_dict
+
+            all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
+            if config.reset and config.mode == "train" and delete_confirm == 'y':
+                for run in all_runs:
+                    logger.info(f'Deleting wandb run: {run}')
+                    run.delete()
+            else:
+                if len(all_runs) > 0:
+                    wandb_conf.id=all_runs[0].id
+                    wandb_conf.resume="must"
+            # update the original config_dict
+            self.config_dict.meta.WANDB.update(wandb_conf)
+
 
         self.rw_executor = self.init_executor(mode='train') 
-        checkpoint_callback = ModelCheckpoint(**train_config.model_checkpoint_callback_paras)
+
+        callback_list = []
+        # Checkpoint Callback
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=self.ckpt_dir,
+            **train_config.model_checkpoint_callback_paras
+        )
+        callback_list.append(checkpoint_callback)
+
+        # Early Stopping Callback
+        if train_config.model_checkpoint_callback_paras.get("monitor", None) and train_config.get('early_stop_patience', 0) > 0:
+            early_stop_callback = EarlyStopping(
+                monitor=train_config.model_checkpoint_callback_paras.get("monitor", None) or train_config.early_stopping_callback_paras.get("monitor", None),
+                **train_config.early_stopping_callback_paras
+            )
+            callback_list.append(early_stop_callback)
 
         self.save_config_to(self.train_dir)
 
-        trainer = pl.Trainer(**train_config.get('trainer_paras', {}), default_root_dir=self.train_dir ,callbacks=[checkpoint_callback])
+        # 0. Load args from config_dict
+        args = self.config_dict.args
+        
+        # 1. trainer parameters specified in train configs
+        trainer_paras = train_config.get('trainer_paras', {})
+        additional_args = trainer_paras.copy()
+
+        # 2. update loggers, callbacks etc.
+        additional_args.update({
+            "default_root_dir": self.train_dir,
+            'logger': self.loggers, # already initialised in advance
+            'callbacks': callback_list,
+        })
+
+        # 3. update some customized behavior
+        if trainer_paras.get('val_check_interval', None) is not None:
+             # this is to use global_step as the interval number: global_step * grad_accumulation = batch_idx (val_check_interval is based on batch_idx)
+            additional_args['val_check_interval'] = trainer_paras.val_check_interval * trainer_paras.get("accumulate_grad_batches", 1)
+        
+        # trainer from args
+        trainer = Trainer.from_argparse_args(args, **additional_args)
+        logger.info(f"arguments passed to trainer: {str(args)}")
+        logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
+        
+        # trainer = pl.Trainer(**train_config.get('trainer_paras', {}), default_root_dir=self.train_dir ,callbacks=callback_list)
         trainer.fit(self.rw_executor, **train_config.get('trainer_fit_paras', {}))
     
     def test(self):
         test_config = self.config_dict.test
 
-
-        assert 'exp_version' in self.config_dict, "You need to specify experiment version to run test!"
-        self.ver_num = self.config_dict['exp_version']
+        if self.use_versioning:
+            assert 'exp_version' in self.config_dict, "You need to specify experiment version to run test!"
+            self.ver_num = self.config_dict['exp_version']
+        else:
+            self.ver_num = 0
+        
         self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
         self.train_dir = self.exp_dir / 'train'
-        self.test_dir = self.exp_dir / f'test-{self.test_suffix}'
+        self.ckpt_dir = self.train_dir / 'saved_models'
+        self.test_dir = (self.exp_dir / f'test') / self.test_suffix
 
+        # Save some frequently-used paths to config
+        self.config_dict.train_dir = str(self.train_dir)
+        self.config_dict.test_dir = str(self.test_dir)
+        self.config_dict.ckpt_dir = str(self.ckpt_dir)
+
+        self.setup_sys_logs(self.test_dir)
+        
         print('test-directory:', self.test_dir)
         self.save_config_to(self.test_dir)
 
+        # Resume wandb experiments if needed
+        if 'wandb' in self.meta_conf['logger_enable']:
+            wandb_conf = self.config_dict.meta.WANDB
+            config = self.config_dict
+
+            all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
+            if len(all_runs) > 0:
+                wandb_conf.id=all_runs[0].id
+                wandb_conf.resume="must"
+            # update the original config_dict
+            self.config_dict.meta.WANDB.update(wandb_conf)
+
+
         self.rw_executor = self.init_executor(mode='test')
-        trainer = pl.Trainer(**test_config.get('trainer_paras', {}), default_root_dir=self.test_dir)
-        trainer.test(self.rw_executor)
+        # trainer = pl.Trainer(**test_config.get('trainer_paras', {}), default_root_dir=self.test_dir)
+        
+        # 0. Load args from config_dict
+        args = self.config_dict.args
+        
+        # 1. setup additional args
+        additional_args = {}
+
+        # 2. update loggers
+        additional_args.update({
+            "default_root_dir": self.test_dir,
+            'logger': self.loggers, # already initialised in advance
+        })
+
+        # if args.strategy == 'ddp':
+        #     from pytorch_lightning.strategies import DDPStrategy
+        #     additional_args['strategy'] = DDPStrategy(find_unused_parameters=True)
+        
+        
+        
+        # trainer from args
+        trainer = Trainer.from_argparse_args(args, **additional_args)
+        logger.info(f"arguments passed to trainer: {str(args)}")
+        logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
+        
+        # Auto-find checkpoints
+        checkpoint_to_load = get_checkpoint_model_path(
+            saved_model_path=self.ckpt_dir,
+            load_checkpoint_name=test_config.checkpoint_name, 
+            load_model_path=test_config.load_model_path, 
+            load_best_model=test_config.load_best_model,
+        )
+        if not checkpoint_to_load:
+            logger.error("No checkpoint found. Please check your config file.")
+            logger.error("!!! Testing continues with untrained checkpoints (also useful when applying pre-trained checkpoints directly)")
+        
+        trainer.test(
+            self.rw_executor, 
+            ckpt_path=checkpoint_to_load if checkpoint_to_load else None
+        )
     
     def eval(self):
         eval_config = self.config_dict.eval
@@ -174,7 +422,8 @@ class RunwayExperiment:
         
         self.ver_num = self.config_dict['exp_version']
         self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
-        self.test_dir = self.exp_dir / f'test-{self.test_suffix}'
+        self.test_dir = self.exp_dir / 'test' / f"{self.test_suffix}"
+        self.setup_sys_logs(self.test_dir)
 
         eval_op_name = eval_config['eval_op_name']
         eval_op_kwargs = eval_config.get('setup_kwargs', {})
@@ -193,3 +442,36 @@ class RunwayExperiment:
         print("Saved to:", self.test_dir)
         print("Evaluation completes!")
 
+    
+def get_checkpoint_model_path(
+    saved_model_path, 
+    load_checkpoint_name="", 
+    load_best_model=False, 
+    load_model_path=""):
+
+    if load_model_path:
+        path_save_model = load_model_path
+        if not os.path.exists(path_save_model):
+            raise FileNotFoundError("Model file not found: {}".format(path_save_model))
+    else:
+        if load_best_model:
+            file_name = "best.ckpt"
+        else:
+            if load_checkpoint_name:
+                file_name = load_checkpoint_name
+            else:
+                logger.error("No checkpoints are specified.")
+                return "" # return empty string to indicate that no model is loaded
+        
+        path_save_model = os.path.join(saved_model_path, file_name)
+
+        file_names = glob.glob(f'{saved_model_path}/*.ckpt', recursive=True)
+        logger.info(f'available checkpoints: {file_names}')
+
+        if not os.path.exists(path_save_model):
+            logger.warning("No checkpoint exists from '{}'. Skipping...".format(path_save_model))
+            logger.info("**First time to train**")
+            return '' # return empty string to indicate that no model is loaded
+        else:
+            logger.info("Loading checkpoint from '{}'".format(path_save_model))
+    return path_save_model
