@@ -38,11 +38,15 @@ class BaseTransform():
         name=None,
         input_mapping: Dict=None,
         output_mapping: Dict=None,
+        use_dummy_data=False,
+        global_config=None,
         **kwargs
         ):
         self.name = name or self.__class__.__name__
         self.input_mapping = input_mapping
         self.output_mapping = output_mapping
+        self.use_dummy_data = use_dummy_data
+        self.global_config = global_config
 
     # @classmethod 
     # def __init__subclass__(cls, **kwargs):
@@ -207,7 +211,12 @@ class LoadHFDataset(BaseTransform):
         self.fields = fields
     
     def _call(self, data):
-        hf_ds = load_dataset(f"{self.dataset_path}/{self.dataset_name}", cache_dir='./cache/')
+        dataset_url = None
+        if self.dataset_path:
+            dataset_url = f"{self.dataset_path}/{self.dataset_name}"
+        else:
+            dataset_url = self.dataset_name
+        hf_ds = load_dataset(dataset_url)
         return hf_ds
 
 @register_transform_functor

@@ -5,6 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 from .dirs import create_dirs
 from typing import Dict
+from pathlib import Path
 
 
 def save_cached_data(config, data_to_save, data_name, data_path=''):
@@ -83,7 +84,7 @@ def cache_data_to_disk(
     if not os.path.exists(dir_path):
         create_dirs([dir_path])
     
-    data_file_name = os.path.join(dir_path, f"{data_name}.{save_format}")
+    data_file_name = make_cache_file_name(data_name, dir_path, save_format)
     
     if save_format == 'pkl':
         save_pickle_data(data_to_save, data_file_name)
@@ -93,10 +94,14 @@ def cache_data_to_disk(
 
 def make_cache_file_name(
     data_name: str,
-    dir_path: str,
+    dir_path,
     save_format: str = 'pkl',
+    suffix: str = None,
     ):
-    return os.path.join(dir_path, f"{data_name}.{save_format}")
+    if suffix is None:
+        return os.path.join(str(dir_path), f"{data_name}.{save_format}")
+    else:
+        return os.path.join(str(dir_path), f"{data_name}-{suffix}.{save_format}")
 
 
 def load_data_from_disk(

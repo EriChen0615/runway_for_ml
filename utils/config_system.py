@@ -163,4 +163,8 @@ def import_user_modules(module_paths=[]):
         module_parent, module_name = os.path.split(module_path)
         if module_name not in sys.modules:
             sys.path.insert(0, module_parent)
-            importlib.import_module(module_name)
+            try:
+                importlib.import_module(module_name) 
+            except BaseException as e:
+                print(e)
+                print(f"Could not import {module_name}")

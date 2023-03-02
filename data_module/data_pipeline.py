@@ -9,6 +9,11 @@ import os
 from tqdm import tqdm
 from ..utils.global_variables import register_to, DataTransform_Registry
 from .data_transforms import *
+import hashlib
+import json
+import logging
+logger = logging.getLogger(__name__)
+from pathlib import Path
 
 class DummyBase(object): pass
 class DataPipeline(DummyBase):
@@ -20,7 +25,7 @@ class DataPipeline(DummyBase):
         self.config = config
 
         self.name = self.config.name
-        self.cache_dir = self.config.get('cache_dir', 'cache/')
+        self.cache_dir = Path(self.config.get('cache_dir', 'cache/'))
 
         self.transforms = EasyDict(self.config.transforms)
 
@@ -34,38 +39,52 @@ class DataPipeline(DummyBase):
         # convenient variables
         self.input_transform_ids = [trans_id for trans_id in self.transforms]
         self.global_config = global_config # pass global config in, so that the transform knows the global setting
+        self.use_dummy_data = self.global_config["use_dummy_data"]
+        if self.use_dummy_data:
+            self.cache_dir = self.cache_dir / "dummy" # dummy data is stored under dummy/ to distinguish them from full-volumn data
+        logger.info(f"Using dummy data? {self.use_dummy_data}")
     
-    def _read_from_cache(self, trans_id):
-        data = load_data_from_disk(trans_id, self.cache_dir)
+    def _make_cache_filename(self, trans_id, trans_info):
+        string_to_hash = trans_id + json.dumps(trans_info.get('setup_kwargs', {}))
+        md5_hash = hashlib.md5(string_to_hash.encode('utf-8')).hexdigest() 
+        cache_fname = f"{trans_id}-{str(md5_hash)}"
+        return cache_fname
+    
+    def _read_from_cache(self, trans_id, trans_info):
+        cache_file_name = self._make_cache_filename(trans_id, trans_info)
+        data = load_data_from_disk(cache_file_name, self.cache_dir)
         return data 
 
-    def _save_to_cache(self, trans_id, data):
-        cache_data_to_disk(data, trans_id, self.cache_dir)
+    def _save_to_cache(self, trans_id, trans_info, data):
+        cache_file_name = self._make_cache_filename(trans_id, trans_info)
+        cache_data_to_disk(data, cache_file_name, self.cache_dir)
     
-    def _check_cache_exist(self, trans_id):
-        cache_file_name = make_cache_file_name(trans_id, self.cache_dir)
-        return cache_file_exists(cache_file_name)
+    def _check_cache_exist(self, trans_id, trans_info):
+        cache_file_name = self._make_cache_filename(trans_id, trans_info)
+        cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
+        return cache_file_exists(cache_file_path)
 
 
     def _exec_transform(self, trans_id, input_data_dict={}):
         # parse transform info
         trans_type, trans_name = trans_id.split(':')
         trans_info = self.transforms[trans_id]
+        cache_file_name = self._make_cache_filename(trans_id, trans_info)
 
         # Read from cache or disk when available
         if trans_id in self.output_cache:
-            print(f"Load {trans_id} from program cache")
+            print(f"Load {cache_file_name} from program cache")
             return self.output_cache[trans_id]
         # Read from disk when instructed and available
-        elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id):
-            print(f"Load {trans_id} from disk cache")
-            outputs = self._read_from_cache(trans_id)
+        elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id, trans_info):
+            print(f"Load {cache_file_name} from disk cache")
+            outputs = self._read_from_cache(trans_id, trans_info)
             self.output_cache[trans_id] = outputs
             return outputs
 
         # Initialize functor
-        func = DataTransform_Registry[trans_info.transform_name]()
-        func.setup(**trans_info.get("setup_kwargs", {}), global_config=self.global_config)
+        func = DataTransform_Registry[trans_info.transform_name](use_dummy_data=self.use_dummy_data, global_config=self.global_config)
+        func.setup(**trans_info.get("setup_kwargs", {}))
 
         print(trans_info)
         print(input_data_dict.keys())
@@ -102,7 +121,7 @@ class DataPipeline(DummyBase):
         # Cache data if appropriate
         self.output_cache[trans_id] = output
         if trans_info.get('cache', False):
-            self._save_to_cache(trans_id, output)
+            self._save_to_cache(trans_id, trans_info, output)
         return output
 
     def apply_transforms(self, input_data_dict={}):

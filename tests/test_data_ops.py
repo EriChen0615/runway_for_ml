@@ -5,7 +5,10 @@ It should output an EasyDict object of out_features (key: feature_name, value: f
 Each transform defined here can be used as an independent unit to form a data pipeline
 Some common transforms are provided by runway
 """
-from runway_for_ml.data_ops.data_transforms import BaseTransform, HFDatasetTransform, register_transform_functor
+import sys
+sys.path.append('../..')
+
+from runway_for_ml.data_module.data_transforms import BaseTransform, HFDatasetTransform, register_transform_functor
 from datasets import load_dataset
 from torchvision.transforms import Compose, ColorJitter, ToTensor
 from transformers import AutoTokenizer
