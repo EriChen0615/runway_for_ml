@@ -9,7 +9,7 @@ local beans_data_pipeline = {
     'input:LoadBeansDataset': {
       transform_name: 'LoadBeansDataset',
       setup_kwargs: {
-        dataset_name: 'beans',
+        dataset_name: 'beans-new',
       },
       regenerate: false,
       cache: true
