@@ -8,8 +8,8 @@
 local seed=2022;
 
 // data cache configuration
-local wandb_cache_dir = "test/cache/wandb_cache/"; # find out; directory to wandb cache
-local default_cache_dir = "test/cache/"; # find out;
+local wandb_cache_dir = "tests/cache/wandb_cache/"; # find out; directory to wandb cache
+local default_cache_dir = "tests/cache/"; # find out;
 
 local default_meta = {
   "DATA_FOLDER": "/home/wl356/projects/Knowledge-based-visual-question-answering/data", # find out

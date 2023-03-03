@@ -55,7 +55,14 @@ class TokenizeMRPC(HFDatasetTransform):
 class LoadBeansDataset(BaseTransform):
     def setup(self, *args, **kwargs):
         if self.use_dummy_data:
-            self.dataset = load_dataset("beams", split="train[:10]")
+            train_dataset = load_dataset("beans", split="train[:10]")
+            test_dataset = load_dataset("beans", split="test[:10]")
+            valid_dataset = load_dataset("beans", split="validation[:10]")
+            self.dataset = {
+                'train': train_dataset,
+                'test': test_dataset,
+                'validation': valid_dataset,
+            }
         else:
             self.dataset = load_dataset("beans")
     
@@ -90,8 +97,10 @@ class BeansJitterTransform(HFDatasetTransform):
         """
         train_dataset = input_ds['train']
         def _transform_image(examples):
-            examples["pixel_values"] = [jitter(image.convert("RGB")) for image in examples["image"]]
+            examples["pixel_values"] = [self.jitter(image.convert("RGB")) for image in examples["image"]]
             return examples
         input_ds['train'] = train_dataset.with_transform(_transform_image)
-        return input_ds
+        train_dataset = train_dataset.remove_columns("image")
+        # input_ds['train'] = [exp for exp in input_ds['train'][:100]]
+        return train_dataset
 

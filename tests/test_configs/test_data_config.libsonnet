@@ -7,9 +7,8 @@ local beans_data_pipeline = {
   do_inspect: true,
   transforms: {
     'input:LoadBeansDataset': {
-      transform_name: 'LoadHFDataset',
+      transform_name: 'LoadBeansDataset',
       setup_kwargs: {
-        dataset_path: 'datasets-maintainers',
         dataset_name: 'beans',
       },
       regenerate: false,
@@ -20,6 +19,10 @@ local beans_data_pipeline = {
       transform_name: 'BeansJitterTransform',
       regenerate: false,
       cache: true,
+      setup_kwargs: {
+        brightness: 0.5, 
+        hue: 0.2
+      },
     },
   }, 
 };

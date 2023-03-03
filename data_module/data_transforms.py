@@ -205,7 +205,7 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
 
 @register_transform_functor
 class LoadHFDataset(BaseTransform):
-    def setup(self, dataset_path, dataset_name, fields=[]):
+    def setup(self, dataset_name, dataset_path=None, fields=[]):
         self.dataset_path = dataset_path
         self.dataset_name = dataset_name
         self.fields = fields

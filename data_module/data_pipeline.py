@@ -25,7 +25,7 @@ class DataPipeline(DummyBase):
         self.config = config
 
         self.name = self.config.name
-        self.cache_dir = Path(self.config.get('cache_dir', 'cache/'))
+        self.cache_dir = Path(global_config.meta.get('default_cache_dir', 'cache/'))
 
         self.transforms = EasyDict(self.config.transforms)
 
