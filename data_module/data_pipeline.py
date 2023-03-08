@@ -43,6 +43,8 @@ class DataPipeline(DummyBase):
         if self.use_dummy_data:
             self.cache_dir = self.cache_dir / "dummy" # dummy data is stored under dummy/ to distinguish them from full-volumn data
         logger.info(f"Using dummy data? {self.use_dummy_data}")
+
+        self.cache_file_exists_dict = {}
     
     def _make_cache_filename(self, trans_id, trans_info):
         string_to_hash = trans_id + json.dumps(trans_info.get('setup_kwargs', {}))
@@ -62,7 +64,9 @@ class DataPipeline(DummyBase):
     def _check_cache_exist(self, trans_id, trans_info):
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
         cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
-        return cache_file_exists(cache_file_path)
+        if cache_file_path not in self.cache_file_exists_dict:
+            self.cache_file_exists_dict[cache_file_path] = cache_file_exists(cache_file_path) # cached for efficiency
+        return self.cache_file_exists_dict[cache_file_path]
     
     def _check_input_nodes_cache_exists(self, input_trans_ids):
         all_exists = True
@@ -71,13 +75,13 @@ class DataPipeline(DummyBase):
         if isinstance(input_trans_ids, List):
             for input_trans_id in input_trans_ids:
                 input_trans_info = self.transform[input_trans_id]
-                all_exists = all_exists and self._check_cache_exist(input_trans_id, input_trans_info) and self._check_input_nodes_cache_exists(input_trans_info.get('input_node', None))
+                all_exists = all_exists and (not input_trans_info.get('regenerate', False)) and self._check_cache_exist(input_trans_id, input_trans_info) and self._check_input_nodes_cache_exists(input_trans_info.get('input_node', None))
                 if all_exists is False:
                     return all_exists
         else:
             input_trans_id = input_trans_ids
             input_trans_info = self.transforms[input_trans_id]
-            all_exists = all_exists and self._check_cache_exist(input_trans_id, input_trans_info) and self._check_input_nodes_cache_exists(input_trans_info.get('input_node', None))
+            all_exists = all_exists and (not input_trans_info.get('regenerate', False)) and self._check_cache_exist(input_trans_id, input_trans_info) and self._check_input_nodes_cache_exists(input_trans_info.get('input_node', None))
             if all_exists is False:
                 return all_exists
         return all_exists
@@ -94,7 +98,7 @@ class DataPipeline(DummyBase):
             print(f"Load {cache_file_name} from program cache")
             return self.output_cache[trans_id]
         # Read from disk when instructed and available
-        elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info['input_node']):
+        elif not trans_info.get('regenerate', False) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info['input_node']):
             print(f"Load {cache_file_name} from disk cache")
             outputs = self._read_from_cache(trans_id, trans_info)
             self.output_cache[trans_id] = outputs
