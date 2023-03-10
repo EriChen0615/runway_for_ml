@@ -17,6 +17,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.utilities.rank_zero import rank_zero_only
 from utils.seed import set_seed
 from easydict import EasyDict
 import json
@@ -29,6 +30,11 @@ from logging.handlers import RotatingFileHandler
 from logging import Formatter
 logger = logging.getLogger(__name__)
 
+@rank_zero_only
+def reset_wandb_runs(all_runs):
+    for run in all_runs:
+        logger.info(f'Deleting wandb run: {run}')
+        run.delete()
 
 class RunwayExperiment:
     def __init__(self, config_dict, root_dir=None):
@@ -225,6 +231,8 @@ class RunwayExperiment:
         with open(file_path, 'w') as f:
             json.dump(self.config_dict, f, indent=4) # Added some indents to prettify the output
 
+
+
     def train(self):
         train_config = self.config_dict.train
 
@@ -277,9 +285,7 @@ class RunwayExperiment:
 
             all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
             if config.reset and config.mode == "train" and delete_confirm == 'y':
-                for run in all_runs:
-                    logger.info(f'Deleting wandb run: {run}')
-                    run.delete()
+                reset_wandb_runs(all_runs)
             else:
                 if len(all_runs) > 0:
                     wandb_conf.id=all_runs[0].id

@@ -70,7 +70,7 @@ class DataPipeline(DummyBase):
             return all_exists
         if isinstance(input_trans_ids, List):
             for input_trans_id in input_trans_ids:
-                input_trans_info = self.transform[input_trans_id]
+                input_trans_info = self.transforms[input_trans_id]
                 all_exists = all_exists and self._check_cache_exist(input_trans_id, input_trans_info) and self._check_input_nodes_cache_exists(input_trans_info.get('input_node', None))
                 if all_exists is False:
                     return all_exists
@@ -88,13 +88,13 @@ class DataPipeline(DummyBase):
         trans_type, trans_name = trans_id.split(':')
         trans_info = self.transforms[trans_id]
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-
+        print(trans_info)
         # Read from cache or disk when available
         if trans_id in self.output_cache:
             print(f"Load {cache_file_name} from program cache")
             return self.output_cache[trans_id]
-        # Read from disk when instructed and available
-        elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info['input_node']):
+            # Read from disk when instructed and available
+        elif not trans_info.get('regenerate', True) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info.get('input_node', [])):
             print(f"Load {cache_file_name} from disk cache")
             outputs = self._read_from_cache(trans_id, trans_info)
             self.output_cache[trans_id] = outputs
