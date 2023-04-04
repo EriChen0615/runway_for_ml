@@ -74,7 +74,7 @@ class DataPipeline(DummyBase):
             return all_exists
         if isinstance(input_trans_ids, List):
             for input_trans_id in input_trans_ids:
-                input_trans_info = self.transform[input_trans_id]
+                input_trans_info = self.transforms[input_trans_id]
                 all_exists = all_exists and (not input_trans_info.get('regenerate', False)) and self._check_cache_exist(input_trans_id, input_trans_info) and self._check_input_nodes_cache_exists(input_trans_info.get('input_node', None))
                 if all_exists is False:
                     return all_exists
@@ -92,7 +92,7 @@ class DataPipeline(DummyBase):
         trans_type, trans_name = trans_id.split(':')
         trans_info = self.transforms[trans_id]
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        print(trans_info)
+        
         # Read from cache or disk when available
         if trans_id in self.output_cache:
             print(f"Load {cache_file_name} from program cache")
@@ -105,6 +105,8 @@ class DataPipeline(DummyBase):
             return outputs
 
         # Initialize functor
+        print(trans_info.transform_name)
+        print(DataTransform_Registry)
         func = DataTransform_Registry[trans_info.transform_name](use_dummy_data=self.use_dummy_data, global_config=self.global_config)
         func.setup(**trans_info.get("setup_kwargs", {}))
 
