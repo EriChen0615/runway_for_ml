@@ -18,7 +18,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
-from utils.seed import set_seed
+from .utils.seed import set_seed
 from easydict import EasyDict
 import json
 import pandas as pd
@@ -119,7 +119,7 @@ class RunwayExperiment:
                 )
                 loggers.append(wandb_logger)
             elif logger_type == 'metrics_history':
-                from utils.metrics_log_callback import MetricsHistoryLogger
+                from .utils.metrics_log_callback import MetricsHistoryLogger
                 metrics_history_logger = MetricsHistoryLogger()
                 loggers.append(metrics_history_logger)
 
@@ -140,7 +140,7 @@ class RunwayExperiment:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(Formatter(log_console_format))
-        from utils.color_logging import CustomFormatter
+        from .utils.color_logging import CustomFormatter
         custom_output_formatter = CustomFormatter(custom_format=log_console_format)
         console_handler.setFormatter(custom_output_formatter)
 
