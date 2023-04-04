@@ -102,9 +102,10 @@ class RunwayExperiment:
         elif mode == 'test':
             def _get_lightning_version(dir_name):
                 for subdir_name in os.listdir(dir_name):
-                    if os.path.isdir(subdir_name):
+                    if os.path.isdir(dir_name / subdir_name):
                         return subdir_name
-            load_ckpt_path = self.train_dir / "lightning_logs" / _get_lightning_version(self.train_dir/"lighning_logs") / "checkpoints" / test_config['checkpoint_name']
+            load_ckpt_path = self.train_dir / "lightning_logs" / _get_lightning_version(self.train_dir/"lightning_logs") / "checkpoints" / test_config['checkpoint_name']
+
             log_file_path = self.test_dir / 'test_case.txt'
             print("Loading checkpoint at:", load_ckpt_path)
             print("Saving testing results to:", log_file_path)
