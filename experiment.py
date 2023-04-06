@@ -110,7 +110,7 @@ class RunwayExperiment:
                 # add base_model as a tag
                 wandb_conf.tags.append(self.config_dict.model_config.base_model)
                 # add modules as tags
-                wandb_conf.tags.extend(self.config_dict.model_config.modules)
+                # wandb_conf.tags.extend(self.config_dict.model_config.modules) # not every model has .modules
 
                 logger.info('init wandb logger with the following settings: {}'.format(wandb_conf))
 
@@ -249,7 +249,7 @@ class RunwayExperiment:
             dirs = [self.exp_dir]
             # Reset all the folders
             print("You are deleting following dirs: ", dirs, "input y to continue")
-            if config.args.override:
+            if config.args.override or config.args.get('force_reset', False): # better naming than override, without breaking existing code
                 delete_confirm = 'y'
             else:
                 delete_confirm = input()
@@ -315,7 +315,7 @@ class RunwayExperiment:
         self.save_config_to(self.train_dir)
 
         # 0. Load args from config_dict
-        args = self.config_dict.args
+        args = train_config.get('trainer_args', self.config_dict.args) # additive change. More descriptive naming
         
         # 1. trainer parameters specified in train configs
         trainer_paras = train_config.get('trainer_paras', {})
@@ -382,7 +382,7 @@ class RunwayExperiment:
         # trainer = pl.Trainer(**test_config.get('trainer_paras', {}), default_root_dir=self.test_dir)
         
         # 0. Load args from config_dict
-        args = self.config_dict.args
+        args = test_config.get('trainer_args', self.config_dict.args)
         
         # 1. setup additional args
         additional_args = {}

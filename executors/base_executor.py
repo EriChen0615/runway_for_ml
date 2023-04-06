@@ -9,7 +9,7 @@ from transformers import AdamW, Adafactor, get_scheduler
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from utils.metrics_log_callback import MetricsHistoryLogger
+from ..utils.metrics_log_callback import MetricsHistoryLogger
 import logging
 logger = logging.getLogger(__name__)
 
