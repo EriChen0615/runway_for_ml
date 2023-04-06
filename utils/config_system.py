@@ -195,7 +195,7 @@ def add_runway_sys_args(arg_parser):
         help="Whether to enable dummy data mode",
     )
 
-    arg_parser = Trainer.add_argparse_args(arg_parser)
+    # arg_parser = Trainer.add_argparse_args(arg_parser)
 
     arg_parser.add_argument(
         "--opts",

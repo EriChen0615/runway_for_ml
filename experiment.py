@@ -315,7 +315,7 @@ class RunwayExperiment:
         self.save_config_to(self.train_dir)
 
         # 0. Load args from config_dict
-        args = train_config.get('trainer_args', self.config_dict.args) # additive change. More descriptive naming
+        args = train_config.get('trainer_args', self.config_dict.get('args', {})) # additive change. More descriptive naming
         
         # 1. trainer parameters specified in train configs
         trainer_paras = train_config.get('trainer_paras', {})
@@ -334,7 +334,8 @@ class RunwayExperiment:
             additional_args['val_check_interval'] = trainer_paras.val_check_interval * trainer_paras.get("accumulate_grad_batches", 1)
         
         # trainer from args
-        trainer = Trainer.from_argparse_args(args, **additional_args)
+        # trainer = Trainer.from_argparse_args(args, **additional_args)
+        trainer = Trainer(**args, **additional_args)
         logger.info(f"arguments passed to trainer: {str(args)}")
         logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
         
@@ -382,10 +383,11 @@ class RunwayExperiment:
         # trainer = pl.Trainer(**test_config.get('trainer_paras', {}), default_root_dir=self.test_dir)
         
         # 0. Load args from config_dict
-        args = test_config.get('trainer_args', self.config_dict.args)
+        args = test_config.get('trainer_args', self.config_dict.get('args', {}))
         
         # 1. setup additional args
-        additional_args = {}
+        trainer_paras = test_config.get('trainer_paras', {})
+        additional_args = trainer_args.copy()
 
         # 2. update loggers
         additional_args.update({
@@ -400,7 +402,8 @@ class RunwayExperiment:
         
         
         # trainer from args
-        trainer = Trainer.from_argparse_args(args, **additional_args)
+        # trainer = Trainer.from_argparse_args(args, **additional_args)
+        trainer = Trainer(**args, **additional_args) # from_argparse_args is deprecated
         logger.info(f"arguments passed to trainer: {str(args)}")
         logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
         

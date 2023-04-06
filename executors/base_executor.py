@@ -161,7 +161,7 @@ class BaseExecutor(pl.LightningModule):
             raise ValueError(f"Invaild optimizer name: {optimizer_name}")
         
         num_warmup_steps = self.optimizer_config.get('scheduler_params', {}).get('num_warmup_steps', 0)
-        if self.optimizer_config.scheduler == 'linear':
+        if self.optimizer_config.get('scheduler', None) == 'linear':
             from transformers import get_linear_schedule_with_warmup
             # Using Linear scheduler
             self.scheduler = get_linear_schedule_with_warmup(
@@ -170,7 +170,7 @@ class BaseExecutor(pl.LightningModule):
                 num_training_steps=self.trainer.estimated_stepping_batches,
                 last_epoch=self.global_step,
             )
-        elif self.optimizer_config.scheduler == 'cosine':
+        elif self.optimizer_config.get('scheduler', None) == 'cosine':
             t_total = self.training_config.trainer_paras.max_epochs
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, 
                             t_total, eta_min=1e-5, last_epoch=-1, verbose=False)
