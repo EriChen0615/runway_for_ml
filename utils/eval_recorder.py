@@ -17,7 +17,9 @@ class EvalRecorder:
 
         self.meta_config = meta_config
 
+        self._log_index = 0
         self._sample_logs = defaultdict(list) 
+        self._sample_columns = set() 
         self._stats_logs = defaultdict(list)
     
     @property
@@ -27,6 +29,12 @@ class EvalRecorder:
     def _make_file_path(self, file_name):
         file_path = os.path.join(self.save_dir, file_name)
         return file_path
+    
+    def reset_for_new_pass(self):
+        """reset for another new pass through the dataset
+        """
+        self._log_index = 0
+        pass
 
     @classmethod
     def load_from_disk(cls, file_prefix, file_format='pkl'): #TODO
@@ -63,6 +71,11 @@ class EvalRecorder:
 
         :param sample_dict: _description_
         """
+        if self._log_index == len(self._sample_logs): # appending new sample
+            pass
+        else: # adding to existing rows
+            pass
+        self._log_index += 1 
         pass
 
     def log_stats_dict(self, stats_dict): #TODO
@@ -118,10 +131,19 @@ class EvalRecorder:
         return self
     
     def __len__(self):
-        return len(self._sample_logs)
+        """assume invariant: all columns in the sample_logs dict has the same length
+
+        :return: _description_
+        """
+        akey = list(self._sample_logs.keys())[0]
+        return len(self._sample_logs[akey])
     
     def __getitem__(self ,index):
         return {colname: column[index] for colname, column in self._sample_logs.items()}
+    
+    def __setattr__(self, col_name, col_value) -> None:
+        assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
+        self._sample_logs[col_name] = col_value
 
     def upload_to_wandb(self, prefix='test', no_log_stats=[]):
         """_summary_
