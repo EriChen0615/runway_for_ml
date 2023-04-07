@@ -4,86 +4,163 @@ from collections import defaultdict
 from easydict import EasyDict
 import os
 import wandb
+import json
+import copy
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class EvalRecorder:
     def __init__(
         self,
-        name,
-        base_dir,
+        name=None,
+        base_dir=None,
         meta_config={},
     ):
         self.name = name
         self.base_dir = base_dir
 
         self.meta_config = meta_config
+        self.meta_config['name'] = name
+        self.meta_config['base_dir'] = base_dir
 
         self._log_index = 0
         self._sample_logs = defaultdict(list) 
         self._sample_columns = set() 
         self._stats_logs = defaultdict(list)
     
+    def rename(self, new_name, new_base_dir=None):
+        self.name = new_name
+        self.meta_config['name'] = self.name
+        if new_base_dir:
+            self.base_dir = new_base_dir
+            self.meta_config['base_dir'] = self.base_dir
+    
     @property
     def save_dir(self):
         return os.path.join(self.base_dir, self.name)
         
-    def _make_file_path(self, file_name):
-        file_path = os.path.join(self.save_dir, file_name)
+    def _make_file_path(self, file_name, file_format):
+        file_path = os.path.join(self.save_dir, f"{file_name}.{file_format}")
         return file_path
     
     def reset_for_new_pass(self):
         """reset for another new pass through the dataset
         """
         self._log_index = 0
-        pass
-
-    @classmethod
-    def load_from_disk(cls, file_prefix, file_format='pkl'): #TODO
-        """load a saved recorder from disk
-
-        :param file_prefix: _description_
-        :param file_format: _description_
-        """
-        if file_format =='pkl':
-            pass
-        elif file_format == 'csv':
-            pass
-        pass
     
-    def _convert_to_dataframe(self, dict, *args, **kwargs):
-        df = pd.DataFrame(dict, *args, **kwargs)
-        return df
+    def _get_separate_serialize_filenames(self, file_prefix, file_format):
+        sample_log_file_path = self._make_file_path(f"{file_prefix}-sample_log", file_format=file_format)
+        stats_log_file_path = self._make_file_path(f"{file_prefix}-stats_log", file_format=file_format)
+        meta_config_file_path = self._make_file_path(f"{file_prefix}-meta_config", file_format=file_format)
+        return sample_log_file_path, stats_log_file_path, meta_config_file_path
         
 
-    def save_to_disk(self, file_prefix, file_format='pkl'): #TODO
+    def save_to_disk(self, file_prefix, file_format='pkl'): 
         """save the recorder to file system
 
         :param file_prefix: _description_
         :param file_format: _description_, defaults to 'pkl'
         """
         if file_format == 'pkl':
-            pass
-        elif file_format == 'csv':
-            pass
-        pass
+            file_path = self._make_file_path(file_prefix, file_format=file_format)
+            with open(file_path, 'w') as f:
+                pickle.dump(self, f)
+            logger.info(f"{self.name} EvalRecorder saved to {file_path}")
+        elif file_format == 'json':
+            sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
+            with open(sample_log_file_path, 'w') as f:
+                json.dump(self._sample_logs, f)
+            with open(stats_log_file_path, 'w') as f:
+                json.dump(self._stats_logs, f)
+            with open(meta_config_file_path, 'w') as f:
+                json.dump(self.meta_config, f)
+            logger.info(f"{self.name} EvalRecorder saved to {sample_log_file_path}, {stats_log_file_path}, {meta_config_file_path}") 
+        else:
+            raise NotImplementedError()
+
+    @classmethod
+    def load_from_disk(cls, name, base_dir, file_prefix, file_format='pkl'): 
+        """load a saved recorder from disk
+        Before this is called. self.name and self.base_dir must be set correctly when the initial object is initialized
+
+        :param file_prefix: _description_
+        :param file_format: _description_
+        :return: True if loading was successful, False otherwise.
+        """
+        instance = cls(name=name, base_dir=base_dir)
+        if file_format =='pkl':
+            file_path = instance._make_file_path(file_prefix, file_format=file_format)
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    loaded_instance = pickle.load(f)
+                    instance.copy_data_from(loaded_instance)
+            else:
+                return None
+        elif file_format == 'json':
+            sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
+            if os.path.exists(sample_log_file_path) and os.path.exists(stats_log_file_path) and os.path.exists(meta_config_file_path):
+                with open(sample_log_file_path, 'r') as f:
+                    instance._sample_logs = json.load(f)
+                with open(stats_log_file_path, 'r') as f:
+                    instance._stats_logs = json.load(f)
+                with open(meta_config_file_path, 'r') as f:
+                    instance.meta_config = json.load(f)
+            else:
+                return None
+        else:
+            raise NotImplementedError()
+        instance.reset_for_new_pass()
+        return instance
     
-    def log_sample_dict(self, sample_dict): #TODO
+    
+    def copy_data_from(self, other): #TODO
+        """Get a (shallow) copy from another EvalRecorder
+        name is preserved
+        """
+        self._sample_logs = copy.copy(other.get_sample_logs())
+        self._stats_logs = copy.copy(other.get_stats_logs())
+        self.meta_config = copy.copy(other.meta_config)
+        
+    
+    def _convert_to_dataframe(self, dict, *args, **kwargs):
+        """_summary_
+
+        :param dict: _description_
+        :return: _description_
+        """
+        df = pd.DataFrame(dict, *args, **kwargs)
+        return df
+        
+    def _append_to_sample_logs_col(self, colname, value, idx=None):
+        if colname not in self._sample_logs:
+            self._sample_logs[colname] = [None] * (len(self)-1)
+        if idx == len(self._sample_logs):
+            self._sample_logs[colname].append(value)
+        elif idx < len(self._sample_logs):
+            self._sample_logs[colname][idx] = value
+        else:
+            raise RuntimeError(f"Error recording sample: idx={idx} but len(sample_log)={len(self._sample_logs)}")
+    
+    def log_sample_dict(self, sample_dict): 
         """log a dictionary that corresponds to a sample level inference/evaluation results or metric
+        Note that the behavior depends on a STATEFUL counter self._log_index
 
         :param sample_dict: _description_
         """
-        if self._log_index == len(self._sample_logs): # appending new sample
-            pass
-        else: # adding to existing rows
-            pass
+        for k, v in sample_dict.items():
+            self._append_to_sample_logs_col(colname=k, value=v, idx=self._log_index)
+        no_value_columns = self._sample_columns - set(sample_dict.keys())
+        for col in no_value_columns:
+            self._append_to_sample_logs_col(col_name=col, value=None, idx=self._log_index)
         self._log_index += 1 
-        pass
 
-    def log_stats_dict(self, stats_dict): #TODO
+    def log_stats_dict(self, stats_dict): 
         """log a dictionary that corresponds to a dataset level statistics
 
         :param stats_dict: _description_
         """
-        pass
+        self._stats_logs.update(stats_dict)
 
     def get_sample_logs(self, data_format='dict'):
         """_summary_
@@ -144,6 +221,9 @@ class EvalRecorder:
     def __setattr__(self, col_name, col_value) -> None:
         assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
         self._sample_logs[col_name] = col_value
+    
+    def __getattr__(self, col_name):
+        return self._sample_logs[col_name]
 
     def upload_to_wandb(self, prefix='test', no_log_stats=[]):
         """_summary_
