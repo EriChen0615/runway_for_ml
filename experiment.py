@@ -188,7 +188,7 @@ class RunwayExperiment:
         print(self.loggers)
 
         # NOTE: Tokenizer should not by default be initialised.
-        # tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config)
+        tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config) if 'tokenizer_config' in self.config_dict else None
 
         rw_executor = None
         if mode == 'train':
@@ -198,7 +198,7 @@ class RunwayExperiment:
                 mode='train',
                 train_config=train_config,
                 test_config=test_config,
-                # tokenizer=tokenizer,
+                tokenizer=tokenizer,
                 eval_pipeline_config=eval_pipeline_config,
                 global_config=self.config_dict,
                 **executor_config.init_kwargs
@@ -218,7 +218,7 @@ class RunwayExperiment:
                 mode='test',
                 test_config=test_config,
                 log_file_path=log_file_path,
-                # tokenizer=tokenizer,
+                tokenizer=tokenizer,
                 global_config=self.config_dict,
                 **executor_config.init_kwargs
             )

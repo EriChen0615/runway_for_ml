@@ -228,20 +228,51 @@ class BaseExecutor(pl.LightningModule):
     #     )
 
     def train_dataloader(self):
-        self.train_dataloader_names = list(self.data_loaders['train'].keys())
+        if 'data_loaders' in self.__dict__:
+            self.train_dataloader_names = list(self.data_loaders['train'].keys())
         
-        # TODO: we only allow one train data loader at the moment
-        return self.train_dataloaders[0]
+            # TODO: we only allow one train data loader at the moment
+            return self.train_dataloaders[0]
+        elif 'train_dataset' in self.__dict__:
+            return DataLoader(
+                self.train_dataset,
+                shuffle=True,
+                batch_size=self.training_config['batch_size'],
+                num_workers=self.training_config.get('dataloader_workers', 8)
+            )
+        else:
+            raise NotImplementedError('Either data_loaders or train_dataset must be available before train_dataloader() is called')
     
     def val_dataloader(self):
-        self.val_dataloader_names = list(self.data_loaders['valid'].keys())
+        if 'data_loaders' in self.__dict__:
+            self.val_dataloader_names = list(self.data_loaders['valid'].keys())
+            return self.valid_dataloaders
+        elif 'val_dataset' in self.__dict__:
+            return DataLoader(
+                self.val_dataset,
+                shuffle=False,
+                batch_size=self.training_config['batch_size'],
+                num_workers=self.training_config.get('dataloader_workers', 8)
+            ) 
+        else:
+            raise NotImplementedError('Either data_loaders or val_dataset must be available before val_dataloader() is called')
 
-        return self.valid_dataloaders
     
     def test_dataloader(self):
-        self.test_dataloader_names = list(self.data_loaders['test'].keys())
-        
-        return self.test_dataloaders
+        if 'data_loaders' in self.__dict__:
+            self.test_dataloader_names = list(self.data_loaders['test'].keys())
+            return self.test_dataloaders
+        elif 'test_dataset' in self.__dict__:
+            return DataLoader(
+                self.test_dataset,
+                shuffle=False,
+                batch_size=self.test_config['batch_size'],
+                num_workers=self.test_config.get('dataloader_workers', 8)
+            )
+        else:
+            raise NotImplementedError('Either data_loaders or test_dataset must be available before test_dataloader() is called')
+            
+            
 
 
     def on_exception(self, trainer, pl_module, exception):
