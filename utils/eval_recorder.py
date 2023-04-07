@@ -3,12 +3,14 @@ import pickle
 from collections import defaultdict
 from easydict import EasyDict
 import os
-import wandb
+# import wandb
 import json
 import copy
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+from pathlib import Path
 
 class EvalRecorder:
     def __init__(
@@ -42,7 +44,7 @@ class EvalRecorder:
         
     def _make_file_path(self, file_name, file_format):
         file_path = os.path.join(self.save_dir, f"{file_name}.{file_format}")
-        return file_path
+        return Path(file_path)
     
     def reset_for_new_pass(self):
         """reset for another new pass through the dataset
@@ -64,11 +66,13 @@ class EvalRecorder:
         """
         if file_format == 'pkl':
             file_path = self._make_file_path(file_prefix, file_format=file_format)
-            with open(file_path, 'w') as f:
+            os.makedirs(file_path.parent, exist_ok=True)
+            with open(file_path, 'wb') as f:
                 pickle.dump(self, f)
             logger.info(f"{self.name} EvalRecorder saved to {file_path}")
         elif file_format == 'json':
             sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
+            os.makedirs(sample_log_file_path.parent, exist_ok=True)
             with open(sample_log_file_path, 'w') as f:
                 json.dump(self._sample_logs, f)
             with open(stats_log_file_path, 'w') as f:
@@ -92,13 +96,13 @@ class EvalRecorder:
         if file_format =='pkl':
             file_path = instance._make_file_path(file_prefix, file_format=file_format)
             if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
+                with open(file_path, 'rb') as f:
                     loaded_instance = pickle.load(f)
                     instance.copy_data_from(loaded_instance)
             else:
                 return None
         elif file_format == 'json':
-            sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
+            sample_log_file_path, stats_log_file_path, meta_config_file_path = instance._get_separate_serialize_filenames(file_prefix, file_format)
             if os.path.exists(sample_log_file_path) and os.path.exists(stats_log_file_path) and os.path.exists(meta_config_file_path):
                 with open(sample_log_file_path, 'r') as f:
                     instance._sample_logs = json.load(f)
@@ -212,30 +216,41 @@ class EvalRecorder:
 
         :return: _description_
         """
-        akey = list(self._sample_logs.keys())[0]
-        return len(self._sample_logs[akey])
+        keys = list(self._sample_logs.keys())
+        if len(keys):
+            akey = keys[0]
+            return len(self._sample_logs[akey])
+        else:
+            return 0
     
     def __getitem__(self ,index):
         return {colname: column[index] for colname, column in self._sample_logs.items()}
     
-    def __setattr__(self, col_name, col_value) -> None:
+    # def __setattr__(self, col_name, col_value) -> None:
+    #     assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
+    #     self._sample_logs[col_name] = col_value
+
+    def set_sample_dict_column(self, col_name, col_value):
         assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
         self._sample_logs[col_name] = col_value
     
-    def __getattr__(self, col_name):
+    # def __getattr__(self, col_name):
+    #     return self._sample_logs[col_name]
+
+    def get_sample_dict_column(self, col_name):
         return self._sample_logs[col_name]
 
-    def upload_to_wandb(self, prefix='test', no_log_stats=[]):
-        """_summary_
+    # def upload_to_wandb(self, prefix='test', no_log_stats=[]):
+    #     """_summary_
 
-        :param prefix: _description_, defaults to 'test'
-        """
-        assert 'wandb_config' in self.meta_config, "to upload to wandb, wandb_config must be present in self.meta_config"
-        sample_table = self._convert_to_dataframe(self._sample_logs)
-        table_to_log = wandb.Table(data=sample_table.values.tolist(), columns=sample_table.columns.tolist())
-        wandb.log({f"{prefix}/Sample Table": table_to_log})
+    #     :param prefix: _description_, defaults to 'test'
+    #     """
+    #     assert 'wandb_config' in self.meta_config, "to upload to wandb, wandb_config must be present in self.meta_config"
+    #     sample_table = self._convert_to_dataframe(self._sample_logs)
+    #     table_to_log = wandb.Table(data=sample_table.values.tolist(), columns=sample_table.columns.tolist())
+    #     wandb.log({f"{prefix}/Sample Table": table_to_log})
         
-        for stat_name, value in self._stats_logs.items():
-            if stat_name in no_log_stats:
-                continue
-            wandb.log({f"{prefix}/{stat_name}": value})
+    #     for stat_name, value in self._stats_logs.items():
+    #         if stat_name in no_log_stats:
+    #             continue
+    #         wandb.log({f"{prefix}/{stat_name}": value})
