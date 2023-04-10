@@ -434,22 +434,33 @@ class RunwayExperiment:
         self.test_dir = self.exp_dir / 'test' / f"{self.test_suffix}"
         self.setup_sys_logs(self.test_dir)
 
-        eval_op_name = eval_config['eval_op_name']
-        eval_op_kwargs = eval_config.get('setup_kwargs', {})
-        eval_op = DataTransform_Registry[eval_op_name]()
-        eval_op.setup(**eval_op_kwargs)
+        eval_pipeline_config = eval_config.pipeline_config
 
-        test_df = pd.read_csv(self.test_dir / 'test_case.csv')
-        eval_res_dict = eval_op._call(test_df)
-
-        metric_df = eval_res_dict['metrics']
-        anno_df = eval_res_dict['annotations']
-
-        metric_df.to_csv(self.test_dir / 'metrics.csv')
-        anno_df.to_csv(self.test_dir / 'annotated_test_case.csv')
-
-        print("Saved to:", self.test_dir)
+        eval_pipeline = DataPipeline(eval_pipeline_config)
+        eval_output = {}
+        if 'out_ops' in eval_pipeline_config:
+            eval_output = eval_pipeline.get_data(eval_pipeline_config['out_ops'])
+        else:
+            eval_output = eval_pipeline.apply_transforms()
         print("Evaluation completes!")
+        print(eval_output)
+
+        # eval_op_name = eval_config['eval_op_name']
+        # eval_op_kwargs = eval_config.get('setup_kwargs', {})
+        # eval_op = DataTransform_Registry[eval_op_name]()
+        # eval_op.setup(**eval_op_kwargs)
+
+        # test_df = pd.read_csv(self.test_dir / 'test_case.csv')
+        # eval_res_dict = eval_op._call(test_df)
+
+        # metric_df = eval_res_dict['metrics']
+        # anno_df = eval_res_dict['annotations']
+
+        # metric_df.to_csv(self.test_dir / 'metrics.csv')
+        # anno_df.to_csv(self.test_dir / 'annotated_test_case.csv')
+
+        # print("Saved to:", self.test_dir)
+        # print("Evaluation completes!")
 
     
 def get_checkpoint_model_path(

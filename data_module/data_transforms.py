@@ -1,6 +1,7 @@
 from easydict import EasyDict
 from ..utils.global_variables import register_to, register_func_to_registry, DataTransform_Registry
 from ..utils.util import get_tokenizer
+from ..utils.eval_recorder import EvalRecorder
 from transformers import AutoTokenizer
 import transformers
 import copy
@@ -11,6 +12,7 @@ from typing import Dict, List
 from collections.abc import Iterable, Mapping
 from datasets import Dataset, DatasetDict, load_dataset
 import functools
+from pathlib import Path
 
 
 def register_transform(fn):
@@ -227,3 +229,44 @@ class DummyTransform(BaseTransform):
     def _call(self, data):
         return data
 
+@register_transform_functor
+class GetEvaluationRecorder(BaseTransform):
+    def setup(self, base_dir, eval_record_name='test-evaluation', recorder_prefix='eval_recorder', file_format='json'):
+        self.eval_record_name = eval_record_name
+        self.recorder_prefix = recorder_prefix
+        self.base_dir = base_dir
+        self.file_format = file_format
+    
+    def _call(self, data):
+        eval_recorder = EvalRecorder.load_from_disk(self.eval_record_name, self.base_dir, file_prefix=self.recorder_prefix, file_format=self.file_format)
+        return eval_recorder
+    
+@register_transform_functor
+class MergeAllEvalRecorderAndSave(BaseTransform):
+    def setup(
+        self, 
+        base_dir = None, 
+        eval_record_name='merged-test-evaluation', 
+        recorder_prefix='eval_recorder', 
+        file_format='json', 
+        save_recorder=True
+    ):
+        self.eval_record_name = eval_record_name
+        self.recorder_prefix = recorder_prefix
+        self.base_dir = base_dir
+        self.file_format = file_format
+        self.save_recorder = save_recorder
+
+    def _call(self, data):
+        """_summary_
+
+        :param data: _description_
+        """
+        eval_recorder = data[0]
+        self.base_dir = self.base_dir or Path(eval_recorder.save_dir.parent)
+        if len(data) > 1:
+            eval_recorder.merge(data[1:]) # merge all evaluation results
+        eval_recorder.rename(self.eval_record_name, base_dir=self.base_dir)
+        eval_recorder.save_to_disk(self.recorder_prefix, file_format=self.file_format)
+        print("Evaluation recorder merged and saved to", eval_recorder.save_dir)
+        

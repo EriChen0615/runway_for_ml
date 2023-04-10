@@ -155,6 +155,28 @@ def test_set_sample_logs_data():
     recorder1.log_sample_dict(new_sample_dict)
     assert recorder1[col_length] == {'index': 10, 'data_id': 99, 'ref': 'new ref', 'hypo': 'new hypo', 'score': 1.0}
 
+def test_merge_eval_recorders():
+    recorder1 = EvalRecorder(name="test_recorder1", base_dir="/tmp")
+    sample1_dict = {'idx': 1, 'a-score': 0.2, 'text': "some text"}
+    sample2_dict = {'idx': 2, 'a-score': 0.4, 'text': "some text"}
+    recorder1.log_sample_dict(sample1_dict)
+    recorder1.log_sample_dict(sample2_dict)
+    recorder1.log_stats_dict({'a-score-avg': 0.3})
+    assert len(recorder1) == 2
+    
+    recorder2 = EvalRecorder(name="test_recorder2", base_dir="/tmp")
+    sample3_dict = {'idx': 1, 'b-score': 0.6, 'text': "some text"}
+    sample4_dict = {'idx': 2, 'b-score': 0.8, 'text': "some text"}
+    recorder2.log_sample_dict(sample3_dict)
+    recorder2.log_sample_dict(sample4_dict)
+    recorder2.log_stats_dict({'b-score-avg': 0.7})
+    assert len(recorder2) == 2
+    
+    recorder1.merge([recorder2])
+    recorder1.rename('merged_recorder')
+    assert recorder1.get_stats_logs() == {'a-score-avg': 0.3, 'b-score-avg': 0.7}
+    assert recorder1.get_sample_logs_column('b-score') == [0.6, 0.8]
+    
 
     
 

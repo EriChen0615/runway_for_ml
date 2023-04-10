@@ -231,7 +231,7 @@ class EvalRecorder:
             other_sample_logs = other.get_sample_logs()
             for other_key in other_sample_logs:
                 if other_key not in self._sample_logs.keys():
-                    self._sample_logs[other_key] = other_sample_logs[other]
+                    self._sample_logs[other_key] = other_sample_logs[other_key]
             
             # dataset stats merge
             self._stats_logs.update(other.get_stats_logs())
