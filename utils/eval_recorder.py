@@ -28,7 +28,7 @@ class EvalRecorder:
 
         self._log_index = 0
         self._sample_logs = defaultdict(list) 
-        self._sample_columns = set() 
+        self._sample_logs['index'] = []
         self._stats_logs = defaultdict(list)
     
     def rename(self, new_name, new_base_dir=None):
@@ -137,14 +137,20 @@ class EvalRecorder:
         return df
         
     def _append_to_sample_logs_col(self, colname, value, idx=None):
-        if colname not in self._sample_logs:
+        if idx > len(self):
+            raise RuntimeError(f"idx cannot be larger than sample_logs length: idx={idx}, length={len(self)}")
+        if idx == len(self):
+            self._sample_logs['index'].append(idx)
+        # ensure idx <= len(self)
+        if colname not in self._sample_logs: # make new column if necessary
             self._sample_logs[colname] = [None] * (len(self)-1)
-        if idx == len(self._sample_logs):
+
+        if idx > len(self._sample_logs[colname]):
+            raise RuntimeError(f"impossible case in eval recorder. idx={idx}, len={len(self._sample_logs[colname])}")
+        elif idx == len(self._sample_logs[colname]):
             self._sample_logs[colname].append(value)
-        elif idx < len(self._sample_logs):
-            self._sample_logs[colname][idx] = value
         else:
-            raise RuntimeError(f"Error recording sample: idx={idx} but len(sample_log)={len(self._sample_logs)}")
+            self._sample_logs[colname][idx] = value
     
     def log_sample_dict(self, sample_dict): 
         """log a dictionary that corresponds to a sample level inference/evaluation results or metric
@@ -154,9 +160,11 @@ class EvalRecorder:
         """
         for k, v in sample_dict.items():
             self._append_to_sample_logs_col(colname=k, value=v, idx=self._log_index)
-        no_value_columns = self._sample_columns - set(sample_dict.keys())
-        for col in no_value_columns:
-            self._append_to_sample_logs_col(col_name=col, value=None, idx=self._log_index)
+        if self._log_index == len(self) - 1:
+            no_value_columns = set(self._sample_logs.keys()) - set(sample_dict.keys()) - set({'index'})
+            for col in no_value_columns:
+                if self._log_index == len(self._sample_logs[col]):
+                    self._append_to_sample_logs_col(colname=col, value=None, idx=self._log_index)
         self._log_index += 1 
 
     def log_stats_dict(self, stats_dict): 
@@ -216,12 +224,7 @@ class EvalRecorder:
 
         :return: _description_
         """
-        keys = list(self._sample_logs.keys())
-        if len(keys):
-            akey = keys[0]
-            return len(self._sample_logs[akey])
-        else:
-            return 0
+        return len(self._sample_logs['index'])
     
     def __getitem__(self ,index):
         return {colname: column[index] for colname, column in self._sample_logs.items()}
@@ -230,14 +233,28 @@ class EvalRecorder:
     #     assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
     #     self._sample_logs[col_name] = col_value
 
-    def set_sample_dict_column(self, col_name, col_value):
+    def set_sample_logs_column(self, col_name, col_value):
         assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
         self._sample_logs[col_name] = col_value
+    
+    def set_sample_logs_data(self, data):
+        """Directly set the sample logs. Move log_index to tail 
+
+        :param data: _description_
+        """
+        col_length = None
+        for column in data:
+            col_length = col_length or len(data[column])
+            if len(data[column]) != col_length:
+                raise RuntimeError(f"All columns in the data used to set sample logs must have the same length. Unmatched column: {column}, length:{len(data[column])}")
+        self._sample_logs = data
+        self._sample_logs['index'] = [i for i in range(col_length)]
+        self._log_index = len(self._sample_logs['index'])
     
     # def __getattr__(self, col_name):
     #     return self._sample_logs[col_name]
 
-    def get_sample_dict_column(self, col_name):
+    def get_sample_logs_column(self, col_name):
         return self._sample_logs[col_name]
 
     # def upload_to_wandb(self, prefix='test', no_log_stats=[]):
