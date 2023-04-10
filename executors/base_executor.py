@@ -11,6 +11,9 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from ..utils.metrics_log_callback import MetricsHistoryLogger
 import logging
+from ..utils.eval_recorder import EvalRecorder
+import os
+import copy
 logger = logging.getLogger(__name__)
 
 class BaseExecutor(pl.LightningModule):
@@ -28,6 +31,7 @@ class BaseExecutor(pl.LightningModule):
         log_file_path=None,
         eval_pipeline_config: DataPipelineConfig=None,
         global_config=None,
+        eval_recorder_config={},
         *args, **kwargs
         ):
         super().__init__()
@@ -284,3 +288,30 @@ class BaseExecutor(pl.LightningModule):
     
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
+
+    def on_validation_start(self) -> None: 
+        self.valid_cnt += 1 
+        base_recorder_dir = self.global_config.get('train_dir', '/tmp')
+        recorder_name = f"validation-{self.valid_cnt}-{self.global_step}" 
+        self.valid_eval_recorder = EvalRecorder(recorder_name, base_recorder_dir, meta_config=copy.copy(self.global_config))
+        self.valid_eval_recorder.meta_config.update({'valid_run_count': self.valid_cnt, 'global_step': self.global_step})
+
+    def on_validation_end(self) -> None:
+        self.valid_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
+        print("Validation recorder saved to", self.valid_eval_recorder.save_dir)
+
+
+    def on_test_start(self) -> None: 
+        base_recorder_dir = self.global_config['experiment_name'], self.global_config.get('test_dir', '/tmp' )
+        recorder_name = f"test-evaluation"
+        self.test_eval_recorder = EvalRecorder(recorder_name, base_recorder_dir, meta_config=copy.copy(self.global_config))
+
+    def on_test_end(self) -> None: 
+        self.test_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
+        print("Test evaluation recorder saved to", self.test_eval_recorder.save_dir)
+    
+    def on_train_end(self) -> None: 
+        if 'valid_eval_recorder' in self.__dict__:
+            self.valid_eval_recorder.rename(new_name='validation_last')
+            self.valid_eval_recorder.save_to_disk("eval_recorder", file_format='json')
+        print("Training completes!")

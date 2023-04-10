@@ -99,6 +99,21 @@ def test_log_sample_dict_and_indexing():
     assert recorder1[2] == {'idx': 3, 'index': 2, 'score': 0.9, 'text': 'some text for text 3', 'extra': 'some info'}
     assert recorder1[3] == {'idx': 3, 'index': 3, 'score': 0.8, 'text': 'some text for text 4', 'extra': None}
 
+def test_log_sample_dict_batch():
+    recorder1 = EvalRecorder(name="test_recorder", base_dir="/tmp")
+    batch_dict1 = {'idx': [1, 2, 3, 3], 'score': [0.1, 0.2, 0.3, 0.4], 'text': ['t1', 't2', 't3', 't4']}
+    sample1_dict = {'idx': 4, 'score': 0.8, 'text': "some text for text 4"}
+    batch_dict2 = {'idx': [1, 2, 3, 3], 'text': ['t1', 't2', 't3', 't4']}
+    recorder1.log_sample_dict_batch(batch_dict1)
+    recorder1.log_sample_dict(sample1_dict)
+    recorder1.log_sample_dict_batch(batch_dict2)
+
+    assert recorder1.get_sample_logs_column('idx') == [1, 2, 3, 3, 4 , 1, 2, 3, 3]
+    assert recorder1.get_sample_logs_column('score') == [0.1, 0.2, 0.3, 0.4, 0.8, None, None, None, None]
+    assert recorder1._log_index == 9
+    assert len(recorder1) == 9
+
+
 def test_reset_for_new_pass_log_sample_dict():
     recorder1 = EvalRecorder(name="test_recorder", base_dir="/tmp")
     sample1_dict = {'idx': 1, 'score': 0.2, 'text': "some text"}

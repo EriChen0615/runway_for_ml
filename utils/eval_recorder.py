@@ -58,7 +58,7 @@ class EvalRecorder:
         return sample_log_file_path, stats_log_file_path, meta_config_file_path
         
 
-    def save_to_disk(self, file_prefix, file_format='pkl'): 
+    def save_to_disk(self, file_prefix, file_format='json'): 
         """save the recorder to file system
 
         :param file_prefix: _description_
@@ -84,7 +84,7 @@ class EvalRecorder:
             raise NotImplementedError()
 
     @classmethod
-    def load_from_disk(cls, name, base_dir, file_prefix, file_format='pkl'): 
+    def load_from_disk(cls, name, base_dir, file_prefix, file_format='json'): 
         """load a saved recorder from disk
         Before this is called. self.name and self.base_dir must be set correctly when the initial object is initialized
 
@@ -166,6 +166,24 @@ class EvalRecorder:
                 if self._log_index == len(self._sample_logs[col]):
                     self._append_to_sample_logs_col(colname=col, value=None, idx=self._log_index)
         self._log_index += 1 
+    
+    def log_sample_dict_batch(self, batch_dict):
+        col_length = None
+        col_names = batch_dict.keys()
+        for colname in col_names:
+            if col_length is None:
+                col_length = len(batch_dict[colname])
+            else:
+                assert col_length == len(batch_dict[colname]), f"all column must have the same length. But {colname} have length {len(values[colname])} which is unmatched with length = {colname}"
+        for i in range(col_length):
+            for colname in col_names:
+                self._append_to_sample_logs_col(colname, batch_dict[colname][i], idx=self._log_index)
+            self._log_index += 1
+
+        no_value_columns = set(self._sample_logs.keys()) - set(batch_dict.keys()) - set({'index'})
+        for col in no_value_columns:
+            if self._log_index >= len(self._sample_logs[col]):
+                self._sample_logs[col].extend([None] * (self._log_index-len(self._sample_logs[col]))) # make equal length
 
     def log_stats_dict(self, stats_dict): 
         """log a dictionary that corresponds to a dataset level statistics
@@ -244,9 +262,10 @@ class EvalRecorder:
         """
         col_length = None
         for column in data:
-            col_length = col_length or len(data[column])
-            if len(data[column]) != col_length:
-                raise RuntimeError(f"All columns in the data used to set sample logs must have the same length. Unmatched column: {column}, length:{len(data[column])}")
+            if col_length is None:
+                col_length = len(data[column])
+            else:
+                assert col_length == len(data[column]), f"All columns in the data used to set sample logs must have the same length. Unmatched column: {column}, length:{len(data[column])}"
         self._sample_logs = data
         self._sample_logs['index'] = [i for i in range(col_length)]
         self._log_index = len(self._sample_logs['index'])
