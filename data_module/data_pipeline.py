@@ -24,7 +24,7 @@ class DataPipeline(DummyBase):
         ):
         self.config = config
 
-        self.name = self.config.name
+        self.name = self.config.get('name', 'default_pipeline')
         self.cache_dir = Path(global_config.meta.get('default_cache_dir', 'cache/'))
 
         self.transforms = EasyDict(self.config.transforms)
@@ -45,6 +45,7 @@ class DataPipeline(DummyBase):
         logger.info(f"Using dummy data? {self.use_dummy_data}")
 
         self.cache_file_exists_dict = {}
+        self.regenerate_all = self.config.get('regenerate', False)
     
     def _make_cache_filename(self, trans_id, trans_info):
         string_to_hash = trans_id + json.dumps(trans_info.get('setup_kwargs', {}))
@@ -62,6 +63,7 @@ class DataPipeline(DummyBase):
         cache_data_to_disk(data, cache_file_name, self.cache_dir)
     
     def _check_cache_exist(self, trans_id, trans_info):
+        trans_type, trans_name  = trans_id.split(':')
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
         cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
         if cache_file_path not in self.cache_file_exists_dict:
@@ -98,7 +100,7 @@ class DataPipeline(DummyBase):
             print(f"Load {cache_file_name} from program cache")
             return self.output_cache[trans_id]
         # Read from disk when instructed and available
-        elif not trans_info.get('regenerate', False) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info.get('input_node', [])):
+        elif not self.regenerate_all and not trans_info.get('regenerate', False) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info.get('input_node', [])):
             print(f"Load {cache_file_name} from disk cache")
             outputs = self._read_from_cache(trans_id, trans_info)
             self.output_cache[trans_id] = outputs

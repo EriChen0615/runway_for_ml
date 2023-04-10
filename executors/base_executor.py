@@ -302,7 +302,7 @@ class BaseExecutor(pl.LightningModule):
 
 
     def on_test_start(self) -> None: 
-        base_recorder_dir = self.global_config['experiment_name'], self.global_config.get('test_dir', '/tmp' )
+        base_recorder_dir = self.global_config.get('test_dir', '/tmp')
         recorder_name = f"test-evaluation"
         self.test_eval_recorder = EvalRecorder(recorder_name, base_recorder_dir, meta_config=copy.copy(self.global_config))
 

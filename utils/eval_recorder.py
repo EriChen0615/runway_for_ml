@@ -20,7 +20,7 @@ class EvalRecorder:
         meta_config={},
     ):
         self.name = name
-        self.base_dir = base_dir
+        self.base_dir = str(base_dir)
 
         self.meta_config = meta_config
         self.meta_config['name'] = name
@@ -202,7 +202,7 @@ class EvalRecorder:
         if data_format == 'dict':
             return self._sample_logs
         elif data_format == 'csv':
-            self._convert_to_csv(self._sample_logs)
+            return self._convert_to_csv(self._sample_logs)
         else:
             raise NotImplementedError(f'data_format {data_format} not supported!')
     
@@ -216,9 +216,12 @@ class EvalRecorder:
         if data_format == 'dict':
             return self._stats_logs
         elif data_format == 'csv':
-            self._convert_to_csv(self._stats_logs)
+            return pd.DataFrame(self._stats_logs, index=[0])
         else:
             raise NotImplementedError(f'data_format {data_format} not supported!')
+    
+    def _convert_to_csv(self, some_dict):
+        return pd.DataFrame(some_dict)
     
     def merge(self, others):
         """merge with another EvalRecorder; append non-overlapping fields to sample dict, extend stats dict and meta dict

@@ -231,10 +231,10 @@ class DummyTransform(BaseTransform):
 
 @register_transform_functor
 class GetEvaluationRecorder(BaseTransform):
-    def setup(self, base_dir, eval_record_name='test-evaluation', recorder_prefix='eval_recorder', file_format='json'):
+    def setup(self, base_dir=None, eval_record_name='test-evaluation', recorder_prefix='eval_recorder', file_format='json'):
         self.eval_record_name = eval_record_name
         self.recorder_prefix = recorder_prefix
-        self.base_dir = base_dir
+        self.base_dir = base_dir or self.global_config['test_dir']
         self.file_format = file_format
     
     def _call(self, data):
@@ -263,10 +263,12 @@ class MergeAllEvalRecorderAndSave(BaseTransform):
         :param data: _description_
         """
         eval_recorder = data[0]
-        self.base_dir = self.base_dir or Path(eval_recorder.save_dir.parent)
+        # self.base_dir = self.base_dir or str(Path(eval_recorder.save_dir).parent)
         if len(data) > 1:
             eval_recorder.merge(data[1:]) # merge all evaluation results
-        eval_recorder.rename(self.eval_record_name, base_dir=self.base_dir)
+        eval_recorder.rename(self.eval_record_name)
+        # eval_recorder.rename(self.eval_record_name, new_base_dir=self.base_dir)
         eval_recorder.save_to_disk(self.recorder_prefix, file_format=self.file_format)
         print("Evaluation recorder merged and saved to", eval_recorder.save_dir)
+        return eval_recorder
         
