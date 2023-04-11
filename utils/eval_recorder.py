@@ -80,6 +80,10 @@ class EvalRecorder:
             with open(meta_config_file_path, 'w') as f:
                 json.dump(self.meta_config, f)
             logger.info(f"{self.name} EvalRecorder saved to {sample_log_file_path}, {stats_log_file_path}, {meta_config_file_path}") 
+        elif file_format == 'csv': #TODO
+            sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
+            os.makedirs(sample_log_file_path.parent, exist_ok=True)
+            raise NotImplementedError()
         else:
             raise NotImplementedError()
 
