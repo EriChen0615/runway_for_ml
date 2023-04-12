@@ -27,7 +27,6 @@ def parse_args_sys(args_list=None):
     arg_parser.add_argument("--tags", nargs='*', default=[], help="Add tags to the wandb logger")
     arg_parser.add_argument('--modules', type=str, nargs="+", default=[], help='Select modules for models. See training scripts for examples.')
     arg_parser.add_argument('--log_prediction_tables', action='store_true', default=False, help='Log prediction tables.')
-    arg_parser.add_argument('--use_dummy_data', type=bool, default=False, help="Set to True to use dummy data. Propagated to all data transforms as self.use_dummy_data")
 
     # ===== Testing Configuration ===== #
     arg_parser.add_argument('--test_batch_size', type=int, default=-1)
@@ -47,59 +46,62 @@ def parse_args_sys(args_list=None):
         args = arg_parser.parse_args(args_list)
     return args
 
-def parse_sys_args():
-    arg_parser = argparse.ArgumentParser(description="")
-    arg_parser.add_argument(
-        '--config',
-        metavar='config_json_file',
-        default='None',
-        help='The Configuration file in json format'
-    )
-    arg_parser.add_argument('--experiment_name', type=str, default='', help='Experiment will be saved under /path/to/EXPERIMENT_FOLDER/$experiment_name$.')
-    arg_parser.add_argument('--from_experiment', type=str, default='', help="The Experiment name from which the new experiment inherits/overwrites config")
-    arg_parser.add_argument('--mode', type=str, default='prepare_data', help='prepare_data/train/test')
-    arg_parser.add_argument(
-        "--opts",
-        help="Modify config options using the command-line",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
+# def parse_sys_args():
+#     arg_parser = argparse.ArgumentParser(description="")
+#     arg_parser.add_argument(
+#         '--config',
+#         metavar='config_json_file',
+#         default='None',
+#         help='The Configuration file in json format'
+#     )
+#     arg_parser.add_argument('--experiment_name', type=str, default='', help='Experiment will be saved under /path/to/EXPERIMENT_FOLDER/$experiment_name$.')
+#     arg_parser.add_argument('--from_experiment', type=str, default='', help="The Experiment name from which the new experiment inherits/overwrites config")
+#     arg_parser.add_argument('--mode', type=str, default='prepare_data', help='prepare_data/train/test')
+#     arg_parser.add_argument(
+#         "--opts",
+#         help="Modify config options using the command-line",
+#         default=None,
+#         nargs=argparse.REMAINDER,
+#     )
     
-    sys_args = arg_parser.parse_args()
-    return sys_args
+#     sys_args = arg_parser.parse_args()
+#     return sys_args
 
 
-def _process_sys_args(config_dict, sys_args):
-    for key in vars(sys_args):
-        if key == 'opts': continue
-        value = getattr(sys_args, key)
-        config_dict[key] = value
-    _process_optional_args(config_dict, sys_args.opts)
+# def _process_sys_args(config_dict, sys_args):
+#     for key in vars(sys_args):
+#         if key == 'opts': continue
+#         value = getattr(sys_args, key)
+#         config_dict[key] = value
+#     _process_optional_args(config_dict, sys_args.opts)
         
-def _process_optional_args(config_dict, opts):
-    if opts is None: return
-    for opt in opts:
-        splited = opt.split('=')
-        path, value = splited[0], '='.join(splited[1:])
-        try:
-            value = eval(value)
-        except:
-            value = str(value)
-            print('input value {} is not a number, parse to string.')
-        config_key_list = path.split('.')
-        item = config_dict
-        for key in config_key_list[:-1]:
-            # assert key in item, f"Optional args error: {opt} does not exists. Error with key={key}"
-            if key not in item:
-                item[key] = EasyDict() 
-            item = item[key]
-        item[config_key_list[-1]] = value
+# def _process_optional_args(config_dict, opts):
+#     if opts is None: return
+#     for opt in opts:
+#         splited = opt.split('=')
+#         path, value = splited[0], '='.join(splited[1:])
+#         try:
+#             value = eval(value)
+#         except:
+#             value = str(value)
+#             print('input value {} is not a number, parse to string.')
+#         config_key_list = path.split('.')
+#         item = config_dict
+#         for key in config_key_list[:-1]:
+#             # assert key in item, f"Optional args error: {opt} does not exists. Error with key={key}"
+#             if key not in item:
+#                 item[key] = EasyDict() 
+#             item = item[key]
+#         item[config_key_list[-1]] = value
             
 
-def parse_config(config_path, sys_args):
-    config_dict = rw_conf.get_config_from_json(config_path)
-    _process_sys_args(config_dict, sys_args)
-    return config_dict    
+# def parse_config(config_path, sys_args):
+#     config_dict = rw_conf.get_config_from_json(config_path)
+#     _process_sys_args(config_dict, sys_args)
+#     return config_dict    
+
+def add_custom_sys_args(arg_parser):
+    return arg_parser
 
 def prepare_data_main(config_dict):
     meta_config = rw_cfg.MetaConfig.from_config(config_dict)
@@ -134,10 +136,15 @@ def eval_main(config_dict):
 
 if __name__ == '__main__':
     print("Runway main started.")
-    sys_args = parse_sys_args()
-    config_dict = parse_config(sys_args.config, sys_args)
+    arg_parser = argparse.ArgumentParser(description="")
+    arg_parser = rw_conf.add_runway_sys_args(arg_parser)
+    arg_parser = add_custom_sys_args(arg_parser)
+    sys_args = arg_parser.parse_args()
+
+    config_dict = rw_conf.parse_config(sys_args.config, sys_args)
     print("Configuration Loaded.")
     pprint(config_dict)
+
     rw_conf.import_user_modules()
     print("User modules imported")
     mode = sys_args.mode

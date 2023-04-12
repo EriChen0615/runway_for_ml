@@ -73,9 +73,11 @@ class RunwayExperiment:
         
         if 'exp_version' not in self.config_dict: 
             self.next_train_ver_num = 0
+            self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, 0, self.tag)
             if self.use_versioning:
                 self._check_version_and_update_exp_dir()
             self.ver_num = self.next_train_ver_num
+            self.config_dict['exp_version'] = self.ver_num
         self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.config_dict['exp_version'], self.tag)
 
         self.train_dir = self.exp_dir / 'train'
@@ -137,7 +139,7 @@ class RunwayExperiment:
                     os.environ['WANDB_CACHE_DIR'] = WANDB_CACHE_DIR
                 
                 # add base_model as a tag
-                wandb_conf.tags.append(self.config_dict.model_config.base_model)
+                wandb_conf.tags.append(self.config_dict.model_config.get('base_model', self.config_dict.model_config.get('model_version', 'NoBaseModelInfo')))
                 # add modules as tags
                 # wandb_conf.tags.extend(self.config_dict.model_config.modules) # not every model has .modules
 
@@ -230,6 +232,7 @@ class RunwayExperiment:
                 tokenizer=tokenizer,
                 eval_pipeline_config=eval_pipeline_config,
                 global_config=self.config_dict,
+                logger=self.loggers,
                 **executor_config.init_kwargs
             )
         elif mode == 'test':
