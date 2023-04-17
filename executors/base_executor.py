@@ -232,7 +232,9 @@ class BaseExecutor(pl.LightningModule):
     #     )
 
     def train_dataloader(self):
-        if 'data_loaders' in self.__dict__:
+        if 'train_dataloaders' in self.__dict__ and 'data_loaders' not in self.__dict__:
+            return self.train_dataloaders
+        elif 'data_loaders' in self.__dict__:
             self.train_dataloader_names = list(self.data_loaders['train'].keys())
         
             # TODO: we only allow one train data loader at the moment
@@ -248,7 +250,9 @@ class BaseExecutor(pl.LightningModule):
             raise NotImplementedError('Either data_loaders or train_dataset must be available before train_dataloader() is called')
     
     def val_dataloader(self):
-        if 'data_loaders' in self.__dict__:
+        if 'valid_dataloaders' in self.__dict__ and 'data_loaders' not in self.__dict__:
+            return self.valid_dataloaders
+        elif 'data_loaders' in self.__dict__:
             self.val_dataloader_names = list(self.data_loaders['valid'].keys())
             return self.valid_dataloaders
         elif 'val_dataset' in self.__dict__:
@@ -263,7 +267,9 @@ class BaseExecutor(pl.LightningModule):
 
     
     def test_dataloader(self):
-        if 'data_loaders' in self.__dict__:
+        if 'test_dataloaders' in self.__dict__ and 'data_loaders' not in self.__dict__:
+            return self.test_dataloader
+        elif 'data_loaders' in self.__dict__:
             self.test_dataloader_names = list(self.data_loaders['test'].keys())
             return self.test_dataloaders
         elif 'test_dataset' in self.__dict__:

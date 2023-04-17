@@ -107,7 +107,7 @@ def prepare_data_main(config_dict):
     meta_config = rw_cfg.MetaConfig.from_config(config_dict)
     # dp_config = rw_cfg.DataPipelineConfig.from_config(config_dict, meta_config)
     dp_config = config_dict.data_pipeline
-    dp = DataPipeline(dp_config)
+    dp = DataPipeline(dp_config, global_config=config_dict)
     dp_config_dict = config_dict.data_pipeline
 
     output_data = {}
