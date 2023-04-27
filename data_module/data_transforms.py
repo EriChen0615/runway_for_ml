@@ -223,19 +223,20 @@ class LoadHFDataset(BaseTransform):
 
 @register_transform_functor
 class SplitHFDatasetToTrainTestValidation(HFDatasetTransform):
-    def setup(self, test_size, valid_size=None):
+    def setup(self, test_size, train_test_split_kwargs={}, valid_size=None):
         self.test_size = test_size
         self.valid_size = valid_size
         self.test_valid_total_size = self.test_size + self.valid_size if self.valid_size else self.test_size
+        self.train_test_split_kwargs = train_test_split_kwargs
         assert self.test_valid_total_size <= 1.0
     
     def _call(self, data, *args, **kwargs):
         train_ds = data['train']
-        train_dict = train_ds.train_test_split(self.test_valid_total_size)
+        train_dict = train_ds.train_test_split(self.test_valid_total_size, **self.train_test_split_kwargs)
         train_ds = train_dict['train']
         test_ds = train_dict['test']
         if self.valid_size is not None:
-            test_valid_dict = train_dict['test'].train_test_split(self.valid_size / self.test_valid_total_size)
+            test_valid_dict = train_dict['test'].train_test_split(self.valid_size / self.test_valid_total_size, **self.train_test_split_kwargs)
             test_ds = test_valid_dict['train']
             valid_ds = test_valid_dict['test']
 
