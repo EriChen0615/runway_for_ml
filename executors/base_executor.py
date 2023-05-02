@@ -129,7 +129,15 @@ class BaseExecutor(pl.LightningModule):
                 self.metrics_history_logger = trainer_logger
             else:
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
-        
+    
+    @property
+    def global_step(self):
+        # TODO: is there a better way?
+        # it seems that lightning has changed its implementation - the global step is no longer set when a checkpoint is loaded in testing
+        if getattr(self, 'ckpt_global_step', None) is not None:
+            return self.ckpt_global_step
+        else:
+            return self.trainer.global_step
 
     def configure_optimizers(self):
         """

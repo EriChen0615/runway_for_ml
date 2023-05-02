@@ -36,6 +36,14 @@ def reset_wandb_runs(all_runs):
         logger.info(f'Deleting wandb run: {run}')
         run.delete()
 
+@rank_zero_only
+def reset_dirs(dirs):
+    for d in dirs:
+        try:
+            delete_dir(d)
+        except Exception as e:
+            print(e)
+
 class RunwayExperiment:
     def __init__(self, config_dict, root_dir=None):
         self.config_dict = config_dict
@@ -254,11 +262,7 @@ class RunwayExperiment:
             else:
                 delete_confirm = input()
             if delete_confirm == 'y':
-                for dir in dirs:
-                    try:
-                        delete_dir(dir)
-                    except Exception as e:
-                        print(e)
+                reset_dirs(dirs)
             else:
                 print("reset cancelled.")
         
