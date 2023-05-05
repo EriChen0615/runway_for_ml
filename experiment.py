@@ -24,6 +24,7 @@ import json
 import pandas as pd
 import wandb
 import glob
+import torch
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -59,6 +60,10 @@ class RunwayExperiment:
             seed_everything(config_dict.meta.seed, workers=True)
             # sets seeds for numpy, torch and python.random.
             logger.info(f'All seeds have been set to {config_dict.meta.seed}')
+        
+        # set float32 precision
+        fp_precision = config_dict.meta.get('float32_precision', 'high')
+        torch.set_float32_matmul_precision(fp_precision)
         
         # # make paths to directories available
         # self.next_train_ver_num = 0
