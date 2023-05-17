@@ -278,6 +278,7 @@ class RunwayExperiment:
         self.setup_sys_logs(self.train_log_dir)
 
         # Save some frequently-used paths to config
+        self.config_dict.root_exp_dir = str(self.root_exp_dir)
         self.config_dict.train_dir = str(self.train_dir)
         self.config_dict.log_dir = str(self.train_log_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
@@ -325,6 +326,7 @@ class RunwayExperiment:
         trainer_paras = train_config.get('trainer_paras', {})
         additional_args = trainer_paras.copy()
 
+
         # 2. update loggers, callbacks etc.
         additional_args.update({
             "default_root_dir": self.train_dir,
@@ -360,6 +362,7 @@ class RunwayExperiment:
         self.test_dir = (self.exp_dir / f'test') / self.test_suffix
 
         # Save some frequently-used paths to config
+        self.config_dict.root_exp_dir = str(self.root_exp_dir)
         self.config_dict.train_dir = str(self.train_dir)
         self.config_dict.test_dir = str(self.test_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
