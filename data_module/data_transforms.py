@@ -193,6 +193,8 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
         results = {}
         for split in ['train', 'test', 'validation']:
             # ds = dataset[split].select((i for i in range(100)))
+            if split not in dataset:
+                continue
             ds = dataset[split]
             for field_name in self.tokenize_fields_list:
                 ds = ds\
@@ -228,7 +230,7 @@ class SplitHFDatasetToTrainTestValidation(HFDatasetTransform):
         self.valid_size = valid_size
         self.test_valid_total_size = self.test_size + self.valid_size if self.valid_size else self.test_size
         self.train_test_split_kwargs = train_test_split_kwargs
-        assert self.test_valid_total_size <= 1.0
+        # assert self.test_valid_total_size <= 1.0
     
     def _call(self, data, *args, **kwargs):
         train_ds = data['train']
