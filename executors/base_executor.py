@@ -68,7 +68,7 @@ class BaseExecutor(pl.LightningModule):
             elif type(trainer_logger) == WandbLogger:
                 self.use_wandb = True
                 self.wandb_logger = trainer_logger
-                self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
+                self.wandb_logger.watch(self.model, log_freq=50, log_graph=True)
             else:
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
         
