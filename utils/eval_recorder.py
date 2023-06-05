@@ -7,6 +7,8 @@ import os
 import json
 import copy
 import logging
+import PIL.Image
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -139,6 +141,18 @@ class EvalRecorder:
         """
         df = pd.DataFrame(dict, *args, **kwargs)
         return df
+    
+    def _handle_PIL_image(self, image, colname, idx, ii=None):
+        if image.mode != 'RGB' and image.mode != 'RGBA':
+            image = image.convert('RGB')
+
+        ext = 'png'
+        img_save_path = self._make_file_path(f"{colname}-{idx}", ext) if ii is None \
+            else self._make_file_path(f"{colname}-{idx}-{ii}", ext)
+        os.makedirs(img_save_path.parent, exist_ok=True)
+        image.save(img_save_path)
+
+        return str(img_save_path)
         
     def _append_to_sample_logs_col(self, colname, value, idx=None):
         if idx > len(self):
@@ -148,6 +162,11 @@ class EvalRecorder:
         # ensure idx <= len(self)
         if colname not in self._sample_logs: # make new column if necessary
             self._sample_logs[colname] = [None] * (len(self)-1)
+        
+        if type(value) is PIL.Image.Image: # handle PIL Image case
+            value = self._handle_PIL_image(value, colname, idx)
+        elif type(value) is list and len(value) > 0 and type(value[0]) is PIL.Image.Image: # handle list of PIL Image
+            value = [self._handle_PIL_image(vv, colname, idx, ii=ii) for ii, vv in enumerate(value)]
 
         if idx > len(self._sample_logs[colname]):
             raise RuntimeError(f"impossible case in eval recorder. idx={idx}, len={len(self._sample_logs[colname])}")
