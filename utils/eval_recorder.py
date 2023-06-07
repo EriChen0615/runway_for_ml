@@ -8,6 +8,7 @@ import json
 import copy
 import logging
 import PIL.Image
+import torch
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -163,10 +164,16 @@ class EvalRecorder:
         if colname not in self._sample_logs: # make new column if necessary
             self._sample_logs[colname] = [None] * (len(self)-1)
         
-        if type(value) is PIL.Image.Image: # handle PIL Image case
+        if issubclass(type(value), PIL.Image.Image): # handle PIL Image case
             value = self._handle_PIL_image(value, colname, idx)
-        elif type(value) is list and len(value) > 0 and type(value[0]) is PIL.Image.Image: # handle list of PIL Image
+        elif type(value) is list and len(value) > 0 and issubclass(type(value[0]), PIL.Image.Image): # handle list of PIL Image
             value = [self._handle_PIL_image(vv, colname, idx, ii=ii) for ii, vv in enumerate(value)]
+        elif issubclass(type(value), torch.Tensor):
+            if len(value.shape)==1 and value.shape[0]==1: # logging a scaler
+                value = value.item()
+            else: # logging an array
+                value = value.tolist()
+            
 
         if idx > len(self._sample_logs[colname]):
             raise RuntimeError(f"impossible case in eval recorder. idx={idx}, len={len(self._sample_logs[colname])}")
@@ -279,6 +286,10 @@ class EvalRecorder:
 
     def set_sample_logs_column(self, col_name, col_value):
         assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
+        if issubclass(type(col_value), torch.Tensor):
+            col_value = col_value.tolist()
+        elif type(col_value) is list and issubclass(type(col_value[0]), torch.Tensor):
+            col_value = [vv.item() for vv in col_value]
         self._sample_logs[col_name] = col_value
     
     def set_sample_logs_data(self, data):

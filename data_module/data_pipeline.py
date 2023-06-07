@@ -48,7 +48,11 @@ class DataPipeline(DummyBase):
         self.regenerate_all = self.config.get('regenerate', False)
     
     def _make_cache_filename(self, trans_id, trans_info):
-        string_to_hash = trans_id + json.dumps(trans_info.get('setup_kwargs', {}))
+        dict_to_hash = trans_info.get('setup_kwargs', {}).copy()
+        for key in list(dict_to_hash.keys()):
+            if key.startswith('_'):
+                del dict_to_hash[key]
+        string_to_hash = trans_id + json.dumps(dict_to_hash)
         md5_hash = hashlib.md5(string_to_hash.encode('utf-8')).hexdigest() 
         cache_fname = f"{trans_id}-{str(md5_hash)}"
         return cache_fname

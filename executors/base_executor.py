@@ -49,6 +49,24 @@ class BaseExecutor(pl.LightningModule):
         self.test_config = test_config
         self.additional_kwargs = model_config.get("additional_kwargs", {})
         
+        _num_of_sep_token=150
+        print("="*_num_of_sep_token)
+        print("MODEL CONFIG".center(_num_of_sep_token)) 
+        print(self.model_config)
+        
+        print("="*_num_of_sep_token)
+        print("OPTIMIZER CONFIG".center(_num_of_sep_token)) 
+        print(self.optimizer_config)
+
+        print("="*_num_of_sep_token)
+        print("TRAINING CONFIG".center(_num_of_sep_token)) 
+        print(self.training_config)
+
+        print("="*_num_of_sep_token)
+        print("TEST CONFIG".center(_num_of_sep_token)) 
+        print(self.test_config)
+        print("="*_num_of_sep_token)
+        
         self.mode = mode
         self.log_file_path = log_file_path
         self.log_list  = []
