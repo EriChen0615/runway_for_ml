@@ -29,7 +29,8 @@ class BaseExecutor(pl.LightningModule):
         test_config={},
         use_data_node=None,
         log_file_path=None,
-        eval_pipeline_config: DataPipelineConfig=None,
+        valid_eval_pipeline_config: DataPipelineConfig=None,
+        test_eval_pipeline_config: DataPipelineConfig=None,
         global_config=None,
         eval_recorder_config={},
         *args, **kwargs
@@ -37,11 +38,18 @@ class BaseExecutor(pl.LightningModule):
         super().__init__()
         self.dp_config = data_pipeline_config
         self.dp = DataPipeline(self.dp_config, global_config=global_config)
-        self.eval_dp_config = eval_pipeline_config
-        if self.eval_dp_config is not None:
-            self.eval_pipeline = DataPipeline(self.eval_dp_config)
+        
+        self.valid_eval_dp_config = valid_eval_pipeline_config
+        if self.valid_eval_dp_config is not None:
+            self.valid_eval_pipeline = DataPipeline(self.valid_eval_dp_config, global_config=global_config)
         else:
-            self.eval_pipeline = None
+            self.valid_eval_pipeline = None
+
+        self.test_eval_dp_config = test_eval_pipeline_config
+        if self.test_eval_dp_config is not None:
+            self.test_eval_pipeline = DataPipeline(self.test_eval_dp_config, global_config=global_config)
+        else:
+            self.test_eval_pipeline = None
 
         self.model_config = model_config
         self.optimizer_config = train_config.get('optimizer_config', None)
@@ -321,9 +329,17 @@ class BaseExecutor(pl.LightningModule):
         self.valid_eval_recorder.meta_config.update({'valid_run_count': self.valid_cnt, 'global_step': self.global_step})
 
     def on_validation_end(self) -> None:
+        valid_name = copy.copy(self.valid_eval_recorder.name)
         self.valid_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
         print("Validation recorder saved to", self.valid_eval_recorder.save_dir)
-
+        print("running ", self.valid_eval_pipeline)
+        if self.valid_eval_pipeline is not None:
+            self.valid_eval_pipeline.reset() # clear cache to make sure all transforms are run as intended
+            out_recorder = self.valid_eval_pipeline.get_data(self.valid_eval_dp_config['out_ops'], explode=True, input_data_dict={'process:ComputeEdgeAgreement': self.valid_eval_recorder})
+            out_recorder.rename(f"{valid_name}-after_valid_eval_pipeline")
+            out_recorder.save_to_disk(f"eval_recorder", file_format='json')
+            print("Eval pipeline for validation run completes. valid eval_recorder name:", out_recorder.name)
+            return out_recorder
 
     def on_test_start(self) -> None: 
         base_recorder_dir = self.global_config.get('test_dir', '/tmp')
@@ -333,6 +349,10 @@ class BaseExecutor(pl.LightningModule):
     def on_test_end(self) -> None: 
         self.test_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
         print("Test evaluation recorder saved to", self.test_eval_recorder.save_dir)
+        # if self.test_eval_pipeline is not None:
+        #     out_data = self.test_eval_pipeline.get_data(self.test_eval_dp_config['out_ops'], explode=True, input_data_dict={'input:GetEvaluationRecorder': self.test_eval_recorder})
+        #     print("Eval pipeline for test run completes. valid eval_recorder name:", self.test_eval_recorder.name)
+        #     return out_data
     
     def on_train_end(self) -> None: 
         if 'valid_eval_recorder' in self.__dict__:

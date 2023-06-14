@@ -147,12 +147,13 @@ class HFDatasetTransform(BaseTransform):
     # def __init__subclass__(cls, **kwargs):
     #     super().__init_subclass__(*args, **kwargs)
     #     register_func_to_registry(cls.__name__, DataTransform_Registry)
-    def setup(self, rename_col_dict, *args, **kwargs):
+    def setup(self, rename_col_dict=None, splits_to_process=['train', 'test', 'validation'], *args, **kwargs):
         """
         setup any reusable resources for the transformed. Will be called before __call__()
         For HFDataset, add rename_col_dict for renaming columns conveniently
         """
         self.rename_col_dict = rename_col_dict
+        self.splits_to_process = splits_to_process
 
     def _check_input(self, data):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict)
@@ -175,7 +176,7 @@ def tokenize_function(tokenizer, field, **kwargs):
 
 @register_transform_functor
 class HFDatasetTokenizeTransform(HFDatasetTransform):
-    def setup(self, rename_col_dict, tokenizer_config: EasyDict, tokenize_fields_list: List):
+    def setup(self, rename_col_dict, tokenizer_config: EasyDict, tokenize_fields_list: List, splits_to_process=['train', 'test', 'validation']):
         super().setup(rename_col_dict)
         self.tokenize_fields_list = tokenize_fields_list
         self.tokenizer = get_tokenizer(tokenizer_config)
@@ -188,6 +189,7 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
              'truncation': True
              }
         )
+        self.splits_to_process = splits_to_process
 
     def _call(self, dataset):
         results = {}
@@ -276,11 +278,13 @@ class MergeAllEvalRecorderAndSave(BaseTransform):
         self, 
         base_dir = None, 
         eval_record_name='merged-test-evaluation', 
+        eval_recorder_prefix='merged',
         recorder_prefix='eval_recorder', 
         file_format='json', 
         save_recorder=True
     ):
         self.eval_record_name = eval_record_name
+        self.eval_recorder_prefix = eval_recorder_prefix
         self.recorder_prefix = recorder_prefix
         self.base_dir = base_dir
         self.file_format = file_format
@@ -295,6 +299,8 @@ class MergeAllEvalRecorderAndSave(BaseTransform):
         # self.base_dir = self.base_dir or str(Path(eval_recorder.save_dir).parent)
         if len(data) > 1:
             eval_recorder.merge(data[1:]) # merge all evaluation results
+        if self.eval_recorder_prefix is not None:
+            self.eval_record_name = f"{self.eval_recorder_prefix}-{eval_recorder.name}"
         eval_recorder.rename(self.eval_record_name)
         # eval_recorder.rename(self.eval_record_name, new_base_dir=self.base_dir)
         eval_recorder.save_to_disk(self.recorder_prefix, file_format=self.file_format)

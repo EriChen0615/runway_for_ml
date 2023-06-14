@@ -290,6 +290,9 @@ class EvalRecorder:
             col_value = col_value.tolist()
         elif type(col_value) is list and issubclass(type(col_value[0]), torch.Tensor):
             col_value = [vv.item() for vv in col_value]
+            # value = self._handle_PIL_image(value, col_name, idx)
+        elif type(col_value) is list and len(col_value) > 0 and issubclass(type(col_value[0]), PIL.Image.Image): # handle list of PIL Image
+            col_value = [self._handle_PIL_image(img, col_name, idx) for idx, img in enumerate(col_value)]
         self._sample_logs[col_name] = col_value
     
     def set_sample_logs_data(self, data):

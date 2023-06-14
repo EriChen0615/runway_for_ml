@@ -169,6 +169,12 @@ class DataPipeline(DummyBase):
             out_trans: self._exec_transform(out_trans, input_data_dict=input_data_dict)
                 for out_trans in out_transforms
         })
+    
+    def _clear_all_program_cache(self):
+        self.output_cache = {}
+    
+    def reset(self):
+        self._clear_all_program_cache()
         
 
             
