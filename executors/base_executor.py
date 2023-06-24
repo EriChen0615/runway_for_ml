@@ -14,6 +14,7 @@ import logging
 from ..utils.eval_recorder import EvalRecorder
 import os
 import copy
+import torch
 logger = logging.getLogger(__name__)
 
 class BaseExecutor(pl.LightningModule):
@@ -33,6 +34,7 @@ class BaseExecutor(pl.LightningModule):
         test_eval_pipeline_config: DataPipelineConfig=None,
         global_config=None,
         eval_recorder_config={},
+        use_dtype='bf16',
         *args, **kwargs
         ):
         super().__init__()
@@ -84,6 +86,13 @@ class BaseExecutor(pl.LightningModule):
         self.global_config = global_config
         self.config = global_config # Easier to use
         self.use_data_node = use_data_node
+
+        if use_dtype == 'bf16': # mixed precision
+            self.use_dtype = torch.bfloat16
+        elif use_dtype == 'fp16': # half precision
+            self.use_dtype = torch.float16
+        else: # full precision
+            self.use_dtype = torch.float32
         
         self._init_model(self.model_config)
 
@@ -94,7 +103,7 @@ class BaseExecutor(pl.LightningModule):
             elif type(trainer_logger) == WandbLogger:
                 self.use_wandb = True
                 self.wandb_logger = trainer_logger
-                self.wandb_logger.watch(self.model, log_freq=50, log_graph=True)
+                self.wandb_logger.watch(self, log_freq=50, log_graph=True)
             else:
                 logger.warning(f'Unsupported logger type: {type(trainer_logger)}')
         
@@ -154,7 +163,7 @@ class BaseExecutor(pl.LightningModule):
                 self.tb_logger = trainer_logger
             elif type(trainer_logger) == WandbLogger:
                 self.wandb_logger = trainer_logger
-                self.wandb_logger.watch(self.model, log_freq=500, log_graph=False)
+                self.wandb_logger.watch(self, log_freq=500, log_graph=False)
             elif type(trainer_logger) == MetricsHistoryLogger:
                 self.metrics_history_logger = trainer_logger
             else:
@@ -233,30 +242,6 @@ class BaseExecutor(pl.LightningModule):
             }
         }
 
-    # def train_dataloader(self):
-    #     return DataLoader(
-    #         self.train_dataset,
-    #         shuffle=True,
-    #         batch_size=self.training_config['batch_size'],
-    #         num_workers=self.training_config.get('dataloader_workers', 8)
-    #     )
-
-    # def val_dataloader(self):
-    #     return DataLoader(
-    #         self.val_dataset,
-    #         shuffle=False,
-    #         batch_size=self.training_config['batch_size'],
-    #         num_workers=self.training_config.get('dataloader_workers', 8)
-    #     )
-    
-    # def test_dataloader(self):
-    #     return DataLoader(
-    #         self.test_dataset,
-    #         shuffle=False,
-    #         batch_size=self.test_config['batch_size'],
-    #         num_workers=self.test_config.get('dataloader_workers', 8)
-    #     )
-
     def train_dataloader(self):
         if 'train_dataloaders' in self.__dict__ and 'data_loaders' not in self.__dict__:
             return self.train_dataloaders
@@ -270,7 +255,7 @@ class BaseExecutor(pl.LightningModule):
                 self.train_dataset,
                 shuffle=True,
                 batch_size=self.training_config['batch_size'],
-                num_workers=self.training_config.get('dataloader_workers', 8)
+                num_workers=self.training_config.get('dataloader_workers', 0)
             )
         else:
             raise NotImplementedError('Either data_loaders or train_dataset must be available before train_dataloader() is called')
@@ -286,7 +271,7 @@ class BaseExecutor(pl.LightningModule):
                 self.val_dataset,
                 shuffle=False,
                 batch_size=self.training_config['batch_size'],
-                num_workers=self.training_config.get('dataloader_workers', 8)
+                num_workers=self.training_config.get('dataloader_workers', 0)
             ) 
         else:
             raise NotImplementedError('Either data_loaders or val_dataset must be available before val_dataloader() is called')
@@ -303,7 +288,7 @@ class BaseExecutor(pl.LightningModule):
                 self.test_dataset,
                 shuffle=False,
                 batch_size=self.test_config['batch_size'],
-                num_workers=self.test_config.get('dataloader_workers', 8)
+                num_workers=self.test_config.get('dataloader_workers', 0)
             )
         else:
             raise NotImplementedError('Either data_loaders or test_dataset must be available before test_dataloader() is called')
@@ -335,7 +320,7 @@ class BaseExecutor(pl.LightningModule):
         print("running ", self.valid_eval_pipeline)
         if self.valid_eval_pipeline is not None:
             self.valid_eval_pipeline.reset() # clear cache to make sure all transforms are run as intended
-            out_recorder = self.valid_eval_pipeline.get_data(self.valid_eval_dp_config['out_ops'], explode=True, input_data_dict={'process:ComputeEdgeAgreement': self.valid_eval_recorder})
+            out_recorder = self.valid_eval_pipeline.get_data(self.valid_eval_dp_config['out_ops'], explode=True, input_data_dict={'input:GetEvaluationRecorder': self.valid_eval_recorder})
             out_recorder.rename(f"{valid_name}-after_valid_eval_pipeline")
             out_recorder.save_to_disk(f"eval_recorder", file_format='json')
             print("Eval pipeline for validation run completes. valid eval_recorder name:", out_recorder.name)

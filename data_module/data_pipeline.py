@@ -59,17 +59,32 @@ class DataPipeline(DummyBase):
     
     def _read_from_cache(self, trans_id, trans_info):
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        data = load_data_from_disk(cache_file_name, self.cache_dir)
+        FuncClass = DataTransform_Registry[trans_info['transform_name']]
+        data = None
+        if issubclass(FuncClass, HFDatasetTransform):
+            data = load_data_from_disk(cache_file_name, self.cache_dir, save_format='hf')
+        else:
+            data = load_data_from_disk(cache_file_name, self.cache_dir)
         return data 
 
     def _save_to_cache(self, trans_id, trans_info, data):
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        cache_data_to_disk(data, cache_file_name, self.cache_dir)
+        FuncClass = DataTransform_Registry[trans_info['transform_name']]
+        if issubclass(FuncClass, HFDatasetTransform):
+            cache_data_to_disk(data, cache_file_name, self.cache_dir, save_format='hf')
+        else:
+            cache_data_to_disk(data, cache_file_name, self.cache_dir)
     
     def _check_cache_exist(self, trans_id, trans_info):
         trans_type, trans_name  = trans_id.split(':')
+        FuncClass = DataTransform_Registry[trans_info['transform_name']]
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
+        
+        if issubclass(FuncClass, HFDatasetTransform):
+            cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir, save_format='hf')
+        else:
+            cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
+        
         if cache_file_path not in self.cache_file_exists_dict:
             self.cache_file_exists_dict[cache_file_path] = cache_file_exists(cache_file_path) # cached for efficiency
         return self.cache_file_exists_dict[cache_file_path]

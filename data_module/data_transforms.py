@@ -269,6 +269,8 @@ class GetEvaluationRecorder(BaseTransform):
         self.file_format = file_format
     
     def _call(self, data):
+        if data is not None:
+            return data # short cut for validation pipeline
         eval_recorder = EvalRecorder.load_from_disk(self.eval_record_name, self.base_dir, file_prefix=self.recorder_prefix, file_format=self.file_format)
         return eval_recorder
     
