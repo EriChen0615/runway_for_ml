@@ -60,6 +60,8 @@ class RunwayExperiment:
             # sets seeds for numpy, torch and python.random.
             logger.info(f'All seeds have been set to {config_dict.meta.seed}')
         
+        self.loggers = None
+        
         # # make paths to directories available
         # self.next_train_ver_num = 0
         # if self.use_versioning:
@@ -91,6 +93,39 @@ class RunwayExperiment:
         self.config_dict.train_log_dir = str(self.train_log_dir)
         self.config_dict.test_dir = str(self.test_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
+
+        # init wandb loggers
+        ## Delete wandb logs if wandb is enabled
+        if 'wandb' in self.meta_conf['logger_enable']:
+            wandb_conf = self.config_dict.meta.WANDB
+            config = self.config_dict
+
+            all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
+            if len(all_runs) > 0 and config.mode == 'train' and config.reset:
+                delete_confirm = 'n'
+                dirs = [self.exp_dir]
+                # Reset all the folders
+                print("You are deleting following dirs: ", dirs, "input y to continue")
+                if config.args.override or config.args.get('force_reset', False): # better naming than override, without breaking existing code
+                    delete_confirm = 'y'
+                else:
+                    delete_confirm = input()
+                if delete_confirm == 'y':
+                    for dir in dirs:
+                        try:
+                            delete_dir(dir)
+                        except Exception as e:
+                            print(e)
+                else:
+                    print("reset cancelled.")
+                if config.reset and config.mode == "train" and delete_confirm == 'y':
+                    reset_wandb_runs(all_runs)
+            else:
+                if len(all_runs) > 0:
+                    wandb_conf.id=all_runs[0].id
+                    wandb_conf.resume="must"
+            # update the original config_dict
+            self.config_dict.meta.WANDB.update(wandb_conf)
 
     
     def _make_exp_full_name(self, exp_name, ver_num, tag):
@@ -209,6 +244,8 @@ class RunwayExperiment:
     def init_executor(self, mode='train'):
         meta_config = self.config_dict.meta
         dp_config = self.config_dict.data_pipeline
+        valid_eval_pipeline_config = self.config_dict.eval.get('valid_eval_pipeline_config', None)
+        test_eval_pipeline_config = self.config_dict.eval.get('test_eval_pipeline_config', None)
         eval_pipeline_config = self.config_dict.eval.get('eval_pipeline_config', None)
         executor_config = self.config_dict.executor
         model_config = self.config_dict.model_config
@@ -230,7 +267,7 @@ class RunwayExperiment:
                 train_config=train_config,
                 test_config=test_config,
                 tokenizer=tokenizer,
-                eval_pipeline_config=eval_pipeline_config,
+                valid_eval_pipeline_config=valid_eval_pipeline_config,
                 global_config=self.config_dict,
                 logger=self.loggers,
                 **executor_config.init_kwargs
@@ -250,6 +287,7 @@ class RunwayExperiment:
                 mode='test',
                 test_config=test_config,
                 log_file_path=log_file_path,
+                test_eval_pipeline_config=test_eval_pipeline_config,
                 tokenizer=tokenizer,
                 global_config=self.config_dict,
                 **executor_config.init_kwargs
@@ -276,24 +314,24 @@ class RunwayExperiment:
         #     self._check_version_and_update_exp_dir()
         
         # Reset the experiment (only used for training)
-        delete_confirm = 'n'
-        config = self.config_dict
-        if config.reset and config.mode == "train":
-            dirs = [self.exp_dir]
-            # Reset all the folders
-            print("You are deleting following dirs: ", dirs, "input y to continue")
-            if config.args.override or config.args.get('force_reset', False): # better naming than override, without breaking existing code
-                delete_confirm = 'y'
-            else:
-                delete_confirm = input()
-            if delete_confirm == 'y':
-                for dir in dirs:
-                    try:
-                        delete_dir(dir)
-                    except Exception as e:
-                        print(e)
-            else:
-                print("reset cancelled.")
+        # delete_confirm = 'n'
+        # config = self.config_dict
+        # if config.reset and config.mode == "train":
+        #     dirs = [self.exp_dir]
+        #     # Reset all the folders
+        #     print("You are deleting following dirs: ", dirs, "input y to continue")
+        #     if config.args.override or config.args.get('force_reset', False): # better naming than override, without breaking existing code
+        #         delete_confirm = 'y'
+        #     else:
+        #         delete_confirm = input()
+        #     if delete_confirm == 'y':
+        #         for dir in dirs:
+        #             try:
+        #                 delete_dir(dir)
+        #             except Exception as e:
+        #                 print(e)
+        #     else:
+        #         print("reset cancelled.")
         
         
 
@@ -312,19 +350,19 @@ class RunwayExperiment:
         # self.config_dict.ckpt_dir = str(self.ckpt_dir)
 
         ## Delete wandb logs if wandb is enabled
-        if 'wandb' in self.meta_conf['logger_enable']:
-            wandb_conf = self.config_dict.meta.WANDB
-            config = self.config_dict
+        # if 'wandb' in self.meta_conf['logger_enable']:
+        #     wandb_conf = self.config_dict.meta.WANDB
+        #     config = self.config_dict
 
-            all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
-            if config.reset and config.mode == "train" and delete_confirm == 'y':
-                reset_wandb_runs(all_runs)
-            else:
-                if len(all_runs) > 0:
-                    wandb_conf.id=all_runs[0].id
-                    wandb_conf.resume="must"
-            # update the original config_dict
-            self.config_dict.meta.WANDB.update(wandb_conf)
+        #     all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
+        #     if config.reset and config.mode == "train" and delete_confirm == 'y':
+        #         reset_wandb_runs(all_runs)
+        #     else:
+        #         if len(all_runs) > 0:
+        #             wandb_conf.id=all_runs[0].id
+        #             wandb_conf.resume="must"
+        #     # update the original config_dict
+        #     self.config_dict.meta.WANDB.update(wandb_conf)
 
 
         self.rw_executor = self.init_executor(mode='train') 
@@ -482,6 +520,9 @@ class RunwayExperiment:
         self.setup_sys_logs(self.test_dir)
         
         self.save_config_to(self.test_dir, config_filename='eval_config')
+
+        if self.loggers is None:
+            self.loggers = self.init_loggers(mode='eval')
 
         eval_pipeline_config = eval_config['pipeline_config']
 

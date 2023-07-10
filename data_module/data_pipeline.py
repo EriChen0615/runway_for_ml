@@ -48,24 +48,43 @@ class DataPipeline(DummyBase):
         self.regenerate_all = self.config.get('regenerate', False)
     
     def _make_cache_filename(self, trans_id, trans_info):
-        string_to_hash = trans_id + json.dumps(trans_info.get('setup_kwargs', {}))
+        dict_to_hash = trans_info.get('setup_kwargs', {}).copy()
+        for key in list(dict_to_hash.keys()):
+            if key.startswith('_'):
+                del dict_to_hash[key]
+        string_to_hash = trans_id + json.dumps(dict_to_hash)
         md5_hash = hashlib.md5(string_to_hash.encode('utf-8')).hexdigest() 
         cache_fname = f"{trans_id}-{str(md5_hash)}"
         return cache_fname
     
     def _read_from_cache(self, trans_id, trans_info):
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        data = load_data_from_disk(cache_file_name, self.cache_dir)
+        FuncClass = DataTransform_Registry[trans_info['transform_name']]
+        data = None
+        if issubclass(FuncClass, HFDatasetTransform):
+            data = load_data_from_disk(cache_file_name, self.cache_dir, save_format='hf')
+        else:
+            data = load_data_from_disk(cache_file_name, self.cache_dir)
         return data 
 
     def _save_to_cache(self, trans_id, trans_info, data):
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        cache_data_to_disk(data, cache_file_name, self.cache_dir)
+        FuncClass = DataTransform_Registry[trans_info['transform_name']]
+        if issubclass(FuncClass, HFDatasetTransform):
+            cache_data_to_disk(data, cache_file_name, self.cache_dir, save_format='hf')
+        else:
+            cache_data_to_disk(data, cache_file_name, self.cache_dir)
     
     def _check_cache_exist(self, trans_id, trans_info):
         trans_type, trans_name  = trans_id.split(':')
+        FuncClass = DataTransform_Registry[trans_info['transform_name']]
         cache_file_name = self._make_cache_filename(trans_id, trans_info)
-        cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
+        
+        if issubclass(FuncClass, HFDatasetTransform):
+            cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir, save_format='hf')
+        else:
+            cache_file_path = make_cache_file_name(cache_file_name, self.cache_dir)
+        
         if cache_file_path not in self.cache_file_exists_dict:
             self.cache_file_exists_dict[cache_file_path] = cache_file_exists(cache_file_path) # cached for efficiency
         return self.cache_file_exists_dict[cache_file_path]
@@ -108,7 +127,7 @@ class DataPipeline(DummyBase):
 
         # Initialize functor
         print(trans_info.transform_name)
-        print(DataTransform_Registry)
+        # print(DataTransform_Registry)
         func = DataTransform_Registry[trans_info.transform_name](use_dummy_data=self.use_dummy_data, global_config=self.global_config)
         func.setup(**trans_info.get("setup_kwargs", {}))
 
@@ -165,6 +184,12 @@ class DataPipeline(DummyBase):
             out_trans: self._exec_transform(out_trans, input_data_dict=input_data_dict)
                 for out_trans in out_transforms
         })
+    
+    def _clear_all_program_cache(self):
+        self.output_cache = {}
+    
+    def reset(self):
+        self._clear_all_program_cache()
         
 
             

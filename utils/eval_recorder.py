@@ -7,6 +7,9 @@ import os
 import json
 import copy
 import logging
+import PIL.Image
+import torch
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -139,6 +142,18 @@ class EvalRecorder:
         """
         df = pd.DataFrame(dict, *args, **kwargs)
         return df
+    
+    def _handle_PIL_image(self, image, colname, idx, ii=None):
+        if image.mode != 'RGB' and image.mode != 'RGBA':
+            image = image.convert('RGB')
+
+        ext = 'png'
+        img_save_path = self._make_file_path(f"{colname}-{idx}", ext) if ii is None \
+            else self._make_file_path(f"{colname}-{idx}-{ii}", ext)
+        os.makedirs(img_save_path.parent, exist_ok=True)
+        image.save(img_save_path)
+
+        return str(img_save_path)
         
     def _append_to_sample_logs_col(self, colname, value, idx=None):
         if idx > len(self):
@@ -148,6 +163,17 @@ class EvalRecorder:
         # ensure idx <= len(self)
         if colname not in self._sample_logs: # make new column if necessary
             self._sample_logs[colname] = [None] * (len(self)-1)
+        
+        if issubclass(type(value), PIL.Image.Image): # handle PIL Image case
+            value = self._handle_PIL_image(value, colname, idx)
+        elif type(value) is list and len(value) > 0 and issubclass(type(value[0]), PIL.Image.Image): # handle list of PIL Image
+            value = [self._handle_PIL_image(vv, colname, idx, ii=ii) for ii, vv in enumerate(value)]
+        elif issubclass(type(value), torch.Tensor):
+            if len(value.shape)==1 and value.shape[0]==1: # logging a scaler
+                value = value.item()
+            else: # logging an array
+                value = value.tolist()
+            
 
         if idx > len(self._sample_logs[colname]):
             raise RuntimeError(f"impossible case in eval recorder. idx={idx}, len={len(self._sample_logs[colname])}")
@@ -260,6 +286,13 @@ class EvalRecorder:
 
     def set_sample_logs_column(self, col_name, col_value):
         assert len(col_value) == len(self), f"Length mismatch: {col_name}: {len(col_value)} versus {len(self)}. Only column of the same number of rows can be added to sample logs!"
+        if issubclass(type(col_value), torch.Tensor):
+            col_value = col_value.tolist()
+        elif type(col_value) is list and issubclass(type(col_value[0]), torch.Tensor):
+            col_value = [vv.item() for vv in col_value]
+            # value = self._handle_PIL_image(value, col_name, idx)
+        elif type(col_value) is list and len(col_value) > 0 and issubclass(type(col_value[0]), PIL.Image.Image): # handle list of PIL Image
+            col_value = [self._handle_PIL_image(img, col_name, idx) for idx, img in enumerate(col_value)]
         self._sample_logs[col_name] = col_value
     
     def set_sample_logs_data(self, data):

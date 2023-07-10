@@ -6,6 +6,7 @@ import shutil
 import copy
 from collections import defaultdict
 import pytest
+import PIL.Image
 
 from runway_for_ml.utils.eval_recorder import EvalRecorder
 
@@ -98,6 +99,44 @@ def test_log_sample_dict_and_indexing():
     assert recorder1[0] == {'idx': 1, 'index': 0, 'score': 0.2, 'text': 'some text', 'extra': None}
     assert recorder1[2] == {'idx': 3, 'index': 2, 'score': 0.9, 'text': 'some text for text 3', 'extra': 'some info'}
     assert recorder1[3] == {'idx': 3, 'index': 3, 'score': 0.8, 'text': 'some text for text 4', 'extra': None}
+
+def test_log_sample_dict_with_PIL_image():
+    recorder1 = EvalRecorder(name="test_recorder", base_dir="test-tmp/")
+    img1 = PIL.Image.new(mode='RGB', size=(512, 512))
+    img2 = img1.copy()
+    img3 = img2.copy()
+    sample1_dict = {'score': 0.2, 'text': "some text", 'image': img1}
+    sample2_dict = {'score': 0.2, 'text': "some text", 'image': img2}
+    sample3_dict = {'score': 0.2, 'text': "some text", 'image': img3}
+    recorder1.log_sample_dict(sample1_dict)
+    recorder1.log_sample_dict(sample2_dict)
+    recorder1.log_sample_dict(sample3_dict)
+    image_col = recorder1.get_sample_logs_column('image')
+    assert image_col == ['test-tmp/test_recorder/image-0.png', 'test-tmp/test_recorder/image-1.png', 'test-tmp/test_recorder/image-2.png']
+    assert os.path.exists(image_col[0])
+    assert os.path.exists(image_col[1])
+    assert os.path.exists(image_col[2])
+
+def test_log_sample_dict_with_PIL_image_list():
+    recorder1 = EvalRecorder(name="test_recorder", base_dir="test-tmp/")
+    img1 = PIL.Image.new(mode='RGB', size=(512, 512))
+    img2 = img1.copy()
+    img3 = img2.copy()
+    sample1_dict = {'score': 0.2, 'text': "some text", 'image': [img1, img2, img3]}
+    sample2_dict = {'score': 0.2, 'text': "some text", 'image': [img1, img2, img3]}
+    recorder1.log_sample_dict(sample1_dict)
+    recorder1.log_sample_dict(sample2_dict)
+
+    image_col = recorder1.get_sample_logs_column('image')
+    assert image_col == [['test-tmp/test_recorder/image-0-0.png', 'test-tmp/test_recorder/image-0-1.png', 'test-tmp/test_recorder/image-0-2.png'],
+                         ['test-tmp/test_recorder/image-1-0.png', 'test-tmp/test_recorder/image-1-1.png', 'test-tmp/test_recorder/image-1-2.png']]
+    assert os.path.exists(image_col[0][0])
+    assert os.path.exists(image_col[0][1])
+    assert os.path.exists(image_col[0][2])
+    assert os.path.exists(image_col[1][0])
+    assert os.path.exists(image_col[1][1])
+    assert os.path.exists(image_col[1][2])
+    
 
 def test_log_sample_dict_batch():
     recorder1 = EvalRecorder(name="test_recorder", base_dir="/tmp")
