@@ -15,7 +15,9 @@ from ..utils.eval_recorder import EvalRecorder
 import os
 import copy
 import torch
+from peft import LoraConfig, get_peft_model
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class BaseExecutor(pl.LightningModule):
     """
@@ -55,6 +57,8 @@ class BaseExecutor(pl.LightningModule):
 
         self.model_config = model_config
         self.optimizer_config = train_config.get('optimizer_config', None)
+        self.use_lora = train_config.get('use_lora', False)
+        self.lora_config = train_config.get('lora_config', {})
         self.training_config = train_config
         self.test_config = test_config
         self.additional_kwargs = model_config.get("additional_kwargs", {})
@@ -94,7 +98,11 @@ class BaseExecutor(pl.LightningModule):
         else: # full precision
             self.use_dtype = torch.float32
         
+
         self._init_model(self.model_config)
+        logging.info(f"Train with LoRA = {self.use_lora}")
+        if self.use_lora:
+            self._apply_lora(self.lora_config)
 
         self.use_wandb = False
         for trainer_logger in kwargs.get('logger', []):
@@ -148,6 +156,24 @@ class BaseExecutor(pl.LightningModule):
                     **model_config.load_checkpoint_kwargs)
         else:
             raise NotImplementedError('The _init_model() method is not defined for library ' + model_config.ModelLib)
+    
+    def _apply_lora(self, all_lora_config):
+        for component_name, lora_config_kwargs in all_lora_config.items():
+            model_component = getattr(self, component_name)
+            suffices_to_lora = lora_config_kwargs.pop('suffices_to_lora', [])
+            # For inpsecting module names
+            for name, module in model_component.named_modules():
+                if any([name.endswith(suffix) for suffix in suffices_to_lora]):
+                    lora_config_kwargs['target_modules'].append(name)
+                # if name.endswith('to_q') or name.endswith('to_v'):
+                    # print(name)
+            print(lora_config_kwargs)
+            input("(BREAKPOINT)")
+
+            lora_config = LoraConfig(**lora_config_kwargs)
+            lora_model = get_peft_model(model_component, lora_config)
+            setattr(self, component_name, lora_model)
+            logging.info(f"Training {model_component} with LoRA. LoRA config = {lora_config}")
     
     def prepare_data(self):
         if self.use_data_node:
