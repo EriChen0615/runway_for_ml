@@ -46,6 +46,7 @@ class DataPipeline(DummyBase):
 
         self.cache_file_exists_dict = {}
         self.regenerate_all = self.config.get('regenerate', False)
+        self.enable_fingerprint = self.config.get('enable_fingerprint', False)
     
     def _make_cache_filename(self, trans_id, trans_info):
         dict_to_hash = trans_info.get('setup_kwargs', {}).copy()

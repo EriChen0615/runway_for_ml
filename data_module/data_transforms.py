@@ -147,13 +147,14 @@ class HFDatasetTransform(BaseTransform):
     # def __init__subclass__(cls, **kwargs):
     #     super().__init_subclass__(*args, **kwargs)
     #     register_func_to_registry(cls.__name__, DataTransform_Registry)
-    def setup(self, rename_col_dict=None, splits_to_process=['train', 'test', 'validation'], *args, **kwargs):
+    def setup(self, rename_col_dict=None, splits_to_process=['train', 'test', 'validation'], _num_proc=1, *args, **kwargs):
         """
         setup any reusable resources for the transformed. Will be called before __call__()
         For HFDataset, add rename_col_dict for renaming columns conveniently
         """
         self.rename_col_dict = rename_col_dict
         self.splits_to_process = splits_to_process
+        self._num_proc = _num_proc
 
     def _check_input(self, data):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict)
@@ -211,9 +212,10 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
 
 @register_transform_functor
 class LoadHFDataset(BaseTransform):
-    def setup(self, dataset_name, dataset_path=None, fields=[]):
+    def setup(self, dataset_name, dataset_path=None, fields=[], load_kwargs=None):
         self.dataset_path = dataset_path
         self.dataset_name = dataset_name
+        self.load_kwargs = load_kwargs or {}
         self.fields = fields
     
     def _call(self, data):
@@ -222,7 +224,9 @@ class LoadHFDataset(BaseTransform):
             dataset_url = f"{self.dataset_path}/{self.dataset_name}"
         else:
             dataset_url = self.dataset_name
-        hf_ds = load_dataset(dataset_url)
+        hf_ds = load_dataset(dataset_url, **self.load_kwargs)
+        if 'split' in self.load_kwargs:
+            hf_ds = DatasetDict({split_name: hf_ds[i] for i, split_name in enumerate(self.load_kwargs['split'])})
         return hf_ds
 
 @register_transform_functor

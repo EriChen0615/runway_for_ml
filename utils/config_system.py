@@ -220,7 +220,8 @@ def _process_sys_args(config_dict, sys_args):
     if sys_args.experiment_name != '':
         config_dict.experiment_name = sys_args.experiment_name
     
-    config_dict.meta.WANDB.tags = config_dict.meta.WANDB.tags + sys_args.tags
+    if 'tags' in config_dict.meta.WANDB:
+        config_dict.meta.WANDB.tags = config_dict.meta.WANDB.tags + sys_args.tags
 
     _process_optional_args(config_dict, sys_args.opts)
 
