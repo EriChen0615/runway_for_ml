@@ -186,6 +186,26 @@ class DataPipeline(DummyBase):
                 for out_trans in out_transforms
         })
     
+    def _get_topological_order(self, transforms):
+        visited = set()
+        queue = []
+        def __topsort_node(trans_id, trans_info):
+            input_transforms = trans_info.get('input_node', [])
+            for in_trans_id, in_trans_info in input_transforms.items():
+                if in_trans_id not in visited:
+                    __topsort_node(in_trans_info)
+            visited.add(trans_id)
+            queue.append(trans_id)
+
+        for trans_id, trans_info in self.transforms.items():
+            __topsort_node(trans_id, trans_info)
+        
+        return queue
+
+    
+    def get_data_new(self, out_transforms, explode=False, input_data_dict={}):
+        pass
+    
     def _clear_all_program_cache(self):
         self.output_cache = {}
     

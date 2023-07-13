@@ -154,7 +154,7 @@ class RunwayExperiment:
         loggers = []
         if mode == 'train':
             log_dir = self.train_log_dir
-        elif mode == 'test':
+        elif mode == 'test' or mode == 'eval':
             log_dir = self.test_dir
         for logger_type in self.logger_enable:
             if logger_type == "csv":

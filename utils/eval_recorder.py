@@ -9,6 +9,7 @@ import copy
 import logging
 import PIL.Image
 import torch
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -77,11 +78,11 @@ class EvalRecorder:
             sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
             os.makedirs(sample_log_file_path.parent, exist_ok=True)
             with open(sample_log_file_path, 'w') as f:
-                json.dump(self._sample_logs, f)
+                json.dump(self._sample_logs, f, cls=NumpyEncoder)
             with open(stats_log_file_path, 'w') as f:
-                json.dump(self._stats_logs, f)
+                json.dump(self._stats_logs, f, cls=NumpyEncoder)
             with open(meta_config_file_path, 'w') as f:
-                json.dump(self.meta_config, f)
+                json.dump(self.meta_config, f, cls=NumpyEncoder)
             logger.info(f"{self.name} EvalRecorder saved to {sample_log_file_path}, {stats_log_file_path}, {meta_config_file_path}") 
         elif file_format == 'csv': #TODO
             sample_log_file_path, stats_log_file_path, meta_config_file_path = self._get_separate_serialize_filenames(file_prefix, file_format)
@@ -154,7 +155,7 @@ class EvalRecorder:
         image.save(img_save_path)
 
         return str(img_save_path)
-        
+    
     def _append_to_sample_logs_col(self, colname, value, idx=None):
         if idx > len(self):
             raise RuntimeError(f"idx cannot be larger than sample_logs length: idx={idx}, length={len(self)}")
@@ -168,6 +169,8 @@ class EvalRecorder:
             value = self._handle_PIL_image(value, colname, idx)
         elif type(value) is list and len(value) > 0 and issubclass(type(value[0]), PIL.Image.Image): # handle list of PIL Image
             value = [self._handle_PIL_image(vv, colname, idx, ii=ii) for ii, vv in enumerate(value)]
+        elif issubclass(type(value), np.ndarray):
+            value = value.tolist()
         elif issubclass(type(value), torch.Tensor):
             if len(value.shape)==1 and value.shape[0]==1: # logging a scaler
                 value = value.item()
@@ -293,6 +296,8 @@ class EvalRecorder:
             # value = self._handle_PIL_image(value, col_name, idx)
         elif type(col_value) is list and len(col_value) > 0 and issubclass(type(col_value[0]), PIL.Image.Image): # handle list of PIL Image
             col_value = [self._handle_PIL_image(img, col_name, idx) for idx, img in enumerate(col_value)]
+        elif type(col_value) is list and len(col_value) > 0 and issubclass(type(col_value[0]), np.ndarray):
+            col_value = [vv.tolist() for vv in col_value]
         self._sample_logs[col_name] = col_value
     
     def set_sample_logs_data(self, data):
@@ -315,6 +320,11 @@ class EvalRecorder:
 
     def get_sample_logs_column(self, col_name):
         return self._sample_logs[col_name]
+    
+    def keep_top_n(self, n):
+        for col_name, col_value in self._sample_logs.items():
+            self._sample_logs[col_name] = col_value[:n]
+        self._log_index = n
 
     # def upload_to_wandb(self, prefix='test', no_log_stats=[]):
     #     """_summary_
@@ -330,3 +340,13 @@ class EvalRecorder:
     #         if stat_name in no_log_stats:
     #             continue
     #         wandb.log({f"{prefix}/{stat_name}": value})
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)

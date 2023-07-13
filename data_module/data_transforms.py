@@ -13,7 +13,12 @@ from collections.abc import Iterable, Mapping
 from datasets import Dataset, DatasetDict, load_dataset
 import functools
 from pathlib import Path
+import sacrebleu
+from pprint import pprint
 
+import logging
+logger = logging.getLogger(__file__)
+logger.setLevel(logging.INFO)
 
 def register_transform(fn):
     register_func_to_registry(fn, DataTransform_Registry)
@@ -266,16 +271,19 @@ class DummyTransform(BaseTransform):
 
 @register_transform_functor
 class GetEvaluationRecorder(BaseTransform):
-    def setup(self, base_dir=None, eval_record_name='test-evaluation', recorder_prefix='eval_recorder', file_format='json'):
+    def setup(self, base_dir=None, eval_record_name='test-evaluation', recorder_prefix='eval_recorder', file_format='json', keep_top_n=None):
         self.eval_record_name = eval_record_name
         self.recorder_prefix = recorder_prefix
         self.base_dir = base_dir or self.global_config['test_dir']
         self.file_format = file_format
+        self.keep_top_n = keep_top_n
     
     def _call(self, data):
         if data is not None:
             return data # short cut for validation pipeline
         eval_recorder = EvalRecorder.load_from_disk(self.eval_record_name, self.base_dir, file_prefix=self.recorder_prefix, file_format=self.file_format)
+        if self.keep_top_n:
+            eval_recorder.keep_top_n(self.keep_top_n)
         return eval_recorder
     
 @register_transform_functor
@@ -313,3 +321,91 @@ class MergeAllEvalRecorderAndSave(BaseTransform):
         print("Evaluation recorder merged and saved to", eval_recorder.save_dir)
         return eval_recorder
         
+@register_transform_functor
+class ComputeBLEU(BaseTransform):
+    """_summary_
+    
+    example config:
+
+    'process:ComputeBLEUScore': {
+      input_node: ['input:GetGEMSGDTestReferences', 'input:GetInferEvalRecorder'],
+      transform_name: 'ComputeBLEU',
+      setup_kwargs: {},
+      regenerate: false,
+      cache: false,
+    },
+
+    :param BaseTransform: _description_
+    """
+    def setup(self, ref_field, pred_field, inp_field=None, special_tokens_to_remove=[]):
+        self.ref_field = ref_field
+        self.pred_field = pred_field
+        self.inp_field = inp_field
+        self.special_tokens_to_remove = special_tokens_to_remove
+
+    def _call(self, eval_recorder, *args, **kwargs):
+        """data must contain keys 'eval_recorder' and 'references', other keys are optional
+
+        :param data: _description_
+        :return: _description_
+        """
+        refs = eval_recorder.get_sample_logs_column(self.ref_field)
+        hypos = eval_recorder.get_sample_logs_column(self.pred_field)
+        print(hypos)
+        input("Press Enter to continue...")
+
+        # Remove special tokens 
+        def _remove_special_tokens(text):
+            for token in self.special_tokens_to_remove:
+                text = text.replace(token, "")
+            return text
+        hypos = [_remove_special_tokens(hypo).strip() for hypo in hypos] # remove hypothesis
+
+        setence_bleu_score = self.compute_sentence_bleu(hypos, refs)
+        corpus_bleu_res = self.compute_corpus_bleu(hypos, refs)
+
+        for bleu_field in ['score', 'bp', 'sys_len', 'ref_len']:
+            eval_recorder.log_stats_dict({f'pred_corpus_bleu_{bleu_field}': getattr(corpus_bleu_res, bleu_field)})
+        eval_recorder.log_stats_dict({'pred_corpus_bleu_without_bp': corpus_bleu_res.score / corpus_bleu_res.bp if corpus_bleu_res.bp > 0.01 else 0.0})
+
+        eval_recorder.set_sample_logs_column('sentence_bleu', setence_bleu_score)
+        eval_recorder.log_stats_dict({'avg_sentence_bleu': sum(setence_bleu_score)/len(setence_bleu_score)})
+
+        return eval_recorder
+
+    def compute_sentence_bleu(self, preds, refs):
+        sentence_bleu_res = []
+        for r, p in zip(refs, preds):
+            sentence_bleu_res.append(sacrebleu.sentence_bleu(p, [r]).score)
+        return sentence_bleu_res
+
+    def compute_corpus_bleu(self, preds, refs):
+        print("Compute corpus bleu:", len(preds), len(refs))
+        corpus_bleu = sacrebleu.corpus_bleu(preds, [refs])
+        # corpus_bleu = sacrebleu.corpus_bleu(preds, [[r] for r in refs])
+        return corpus_bleu
+        
+@register_transform_functor
+class DisplayEvalResults(BaseTransform):
+    def setup(self, rows_to_display=5, display_format='csv'):
+        self.rows_to_display = rows_to_display
+        self.display_format = display_format
+    
+    def print_boarder(self):
+        print("="*150)
+    
+    def _call(self, eval_recorder, *args, **kwargs):
+        if self.display_format == 'csv':
+            df = eval_recorder.get_sample_logs(data_format='csv')
+            print("Available columns in sample logs:")
+            pprint(df.columns.tolist())
+            with pd.option_context('display.max_rows', self.rows_to_display, 'display.max_columns', None):
+                print(df.head(n=self.rows_to_display))
+        self.print_boarder()
+        # pprint(f"Full evaluation data saved to {eval_recorder.save_dir}")
+        logger.warning(f"Full evaluation data saved to {eval_recorder.save_dir}")
+        self.print_boarder()
+        print(f"Evaluation Report for {self.global_config['experiment_name']}".center(150))
+        self.print_boarder()
+        pprint(eval_recorder.get_stats_logs(data_format='dict'))
+        return eval_recorder
