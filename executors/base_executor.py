@@ -359,7 +359,7 @@ class BaseExecutor(pl.LightningModule):
 
     def on_test_end(self) -> None: 
         self.test_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
-        print("Test evaluation recorder saved to", self.test_eval_recorder.save_dir)
+        logging.warning("Test evaluation recorder saved to", self.test_eval_recorder.save_dir)
         # if self.test_eval_pipeline is not None:
         #     out_data = self.test_eval_pipeline.get_data(self.test_eval_dp_config['out_ops'], explode=True, input_data_dict={'input:GetEvaluationRecorder': self.test_eval_recorder})
         #     print("Eval pipeline for test run completes. valid eval_recorder name:", self.test_eval_recorder.name)

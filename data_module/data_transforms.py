@@ -232,6 +232,10 @@ class LoadHFDataset(BaseTransform):
         hf_ds = load_dataset(dataset_url, **self.load_kwargs)
         if 'split' in self.load_kwargs:
             hf_ds = DatasetDict({split_name: hf_ds[i] for i, split_name in enumerate(self.load_kwargs['split'])})
+
+        if self.use_dummy_data:
+            for ds in hf_ds:
+                ds = ds[:10] 
         return hf_ds
 
 @register_transform_functor
@@ -318,7 +322,7 @@ class MergeAllEvalRecorderAndSave(BaseTransform):
         eval_recorder.rename(self.eval_record_name)
         # eval_recorder.rename(self.eval_record_name, new_base_dir=self.base_dir)
         eval_recorder.save_to_disk(self.recorder_prefix, file_format=self.file_format)
-        print("Evaluation recorder merged and saved to", eval_recorder.save_dir)
+        logger.warning(f"Evaluation recorder merged and saved to {eval_recorder.save_dir}")
         return eval_recorder
         
 @register_transform_functor
@@ -351,8 +355,8 @@ class ComputeBLEU(BaseTransform):
         """
         refs = eval_recorder.get_sample_logs_column(self.ref_field)
         hypos = eval_recorder.get_sample_logs_column(self.pred_field)
-        print(hypos)
-        input("Press Enter to continue...")
+        # print(hypos)
+        # input("Press Enter to continue...")
 
         # Remove special tokens 
         def _remove_special_tokens(text):
@@ -403,8 +407,8 @@ class DisplayEvalResults(BaseTransform):
                 print(df.head(n=self.rows_to_display))
         self.print_boarder()
         # pprint(f"Full evaluation data saved to {eval_recorder.save_dir}")
-        logger.warning(f"Full evaluation data saved to {eval_recorder.save_dir}")
-        self.print_boarder()
+        # logger.warning(f"Full evaluation data saved to {eval_recorder.save_dir}")
+        # self.print_boarder()
         print(f"Evaluation Report for {self.global_config['experiment_name']}".center(150))
         self.print_boarder()
         pprint(eval_recorder.get_stats_logs(data_format='dict'))
