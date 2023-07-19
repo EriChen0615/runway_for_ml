@@ -186,6 +186,59 @@ class HFDatasetTransform(BaseTransform):
         return isinstance(data, Dataset) or isinstance(data, DatasetDict) or data is None
     
     def image_magic(self, img_path_fields, out_img_fields=None, batched=False, save_out_images=True):
+        """A magic decorator for image processing. It does the following:
+        1. Automatically convert image paths (`img_path_fields`) to PIL.Image before passing them into the decorated function.
+        2. Save processed images specified (`out_image_fields`, or `img_path_fields` if unspecified) to cache_dir. `cache_dir` is specified in the transform constructor.
+        3. Convert processed images back to paths before returning the result. This ensure the images are not doubly stored in the arrow files.
+
+        Typical Usage:
+         - decorate the function used in `map` of HFDatasetTransform. 
+        
+        Example:
+        class ResizeAllImages_Native(ResizeAllImages)
+            def _call(self, ds, *args, **kwargs):
+                @self.image_magic(self.fields_to_resize)
+                def resize_image(example):
+                    for img_field in self.fields_to_resize:
+                        if img_field in example.keys():
+                            # Fixed: width and height are switched when using np.array()
+                            img = example[img_field] #np.array(example[img_field])
+                            tgt_W, tgt_H = self._compute_W_H_for_image((img.size[0], img.size[1]))
+                            example[img_field] = img.resize((tgt_W, tgt_H))
+                    return example
+            
+                @self.image_magic(self.fields_to_resize, batched=True)
+                def batch_resize_image(examples):
+                    for img_field in self.fields_to_resize:
+                        res = []
+                        orig = []
+                        for img in examples[img_field]:
+                            tgt_W, tgt_H = self._compute_W_H_for_image((img.size[0], img.size[1]))
+                            resized_img = img.resize((tgt_W, tgt_H))
+                            res.append(resized_img)
+                            orig.append(img)
+
+                        examples[img_field] = res
+                    return examples
+                    
+                res = {} #DatasetDict()
+                for split in ds:
+                    if split in self.splits_to_process:
+                        if not self.batched:
+                            resized_ds = ds[split].map(resize_image, num_proc=self.num_proc, **self.map_kwargs)
+                        else:
+                            resized_ds = ds[split].map(batch_resize_image, num_proc=self.num_proc, batched=True, **self.map_kwargs)
+                        res[split] = resized_ds
+                    else:
+                        res[split] = ds[split]
+                return res
+            
+
+        :param img_path_fields: <list> of field names to be processed
+        :param out_img_fields: <list> of image field names to save, defaults to None
+        :param batched: <bool> whether the function used in map is batched, defaults to False
+        :param save_out_images: <bool> whether the images specified by `out_image_fields` should be saved to cache_dir, defaults to True
+        """
         def transform_decorator(func):
             def wrapper(example, *args, **kwargs):
                 """func must return a dictionary
