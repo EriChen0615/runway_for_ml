@@ -1,5 +1,6 @@
 import transformers
 import torch
+import datasets
 
 def get_tokenizer(tokenizer_config):
     tokenizer_dict = tokenizer_config
@@ -20,4 +21,12 @@ def batch_depad(x, attension_mask=None, y=None, pad_len=0):
     attension_mask = attension_mask[:, :max_in_length]
     max_out_length = torch.max((~(y==0)).sum(dim=-1))+pad_len
     return x[:, :max_in_length], attension_mask, y[:, :max_out_length]
+
+def cast_ds_column_to_image(ds, columns):
+    for col in columns:
+        if col in ds.info.features:
+            ds = ds.cast_column(col, datasets.features.image.Image())
+        else:
+            print(f"Feature {col} not in {ds}")
+    return ds
 

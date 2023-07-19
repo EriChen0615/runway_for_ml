@@ -15,6 +15,8 @@ import functools
 from pathlib import Path
 import sacrebleu
 from pprint import pprint
+import os
+from PIL import Image
 
 import logging
 logger = logging.getLogger(__file__)
@@ -47,6 +49,10 @@ class BaseTransform():
         output_mapping: Dict=None,
         use_dummy_data=False,
         global_config=None,
+        transform_id=None,
+        transform_hash=None,
+        cache_base_dir=None,
+        cache_dir=None,
         **kwargs
         ):
         self.name = name or self.__class__.__name__
@@ -54,6 +60,21 @@ class BaseTransform():
         self.output_mapping = output_mapping
         self.use_dummy_data = use_dummy_data
         self.global_config = global_config
+
+        self.transform_id = transform_id
+        self.transform_hash = transform_hash
+
+        if cache_dir:
+            self.cache_dir = cache_dir
+        elif cache_base_dir:
+            self.cache_dir = os.path.join(cache_base_dir, f"{self.transform_id}-{self.transform_hash}")
+        else:
+            base_dir = self.global_config['meta'].get('default_cache_dir', 'cache/')
+            if self.use_dummy_data:
+                base_dir = os.path.join(base_dir, 'dummy')
+            self.cache_dir = os.path.join(base_dir, f"{self.transform_id}-{self.transform_hash}")
+
+        os.makedirs(self.cache_dir, exist_ok=True)
 
     # @classmethod 
     # def __init__subclass__(cls, **kwargs):
@@ -162,7 +183,67 @@ class HFDatasetTransform(BaseTransform):
         self._num_proc = _num_proc
 
     def _check_input(self, data):
-        return isinstance(data, Dataset) or isinstance(data, DatasetDict)
+        return isinstance(data, Dataset) or isinstance(data, DatasetDict) or data is None
+    
+    def image_magic(self, img_path_fields, out_img_fields=None, batched=False, save_out_images=True):
+        def transform_decorator(func):
+            def wrapper(example, *args, **kwargs):
+                """func must return a dictionary
+
+                :param func: _description_
+                :param example: _description_
+                :return: _description_
+                """
+                img_name_memo = None 
+                img_path_memo = None
+                if not batched:
+                    img_name_memo = {img_path_field: example[img_path_field].split('/')[-1] for img_path_field in img_path_fields}
+                    img_path_memo = {img_path_field: example[img_path_field] for img_path_field in img_path_fields}
+                    for img_path in img_path_fields:
+                        example[img_path] = Image.open(example[img_path])
+                else: # batch operation
+                    img_name_memo = {img_path_field: [pp.split('/')[-1] for pp in example[img_path_field] ] for img_path_field in img_path_fields}
+                    img_path_memo = {img_path_field: example[img_path_field] for img_path_field in img_path_fields}
+                    for img_path in img_path_fields:
+                        example[img_path] = [Image.open(pp) for pp in example[img_path]]
+                
+                processed_example = func(example, *args, **kwargs)
+
+                # PROCESS OUT IMAGES FIELDS
+                name_base_field = img_path_fields[0] #TODO can be more flexible with naming
+
+                img_out_fields = out_img_fields or img_path_fields
+                if not batched:
+                    for img_out_field in img_out_fields:
+                        img_save_path = os.path.join(self.cache_dir, f"{img_name_memo[name_base_field]}")
+                        if save_out_images:
+                            processed_example[img_out_field].convert('RGB').save(img_save_path)
+                        processed_example[img_out_field] = img_save_path
+                else:
+                    for img_out_field in img_out_fields:
+                        for i, img_out in enumerate(processed_example[img_out_field]):
+                            img_save_path = os.path.join(self.cache_dir, f"{img_name_memo[name_base_field][i]}")
+                            if save_out_images:
+                                img_out.save(img_save_path)
+                            processed_example[img_out_field][i] = img_save_path
+                
+                # Convert in image fields from PIL.Image back to paths
+                for img_in_field in img_path_fields:
+                    processed_example[img_in_field] = img_path_memo[img_in_field]
+
+                # read images to fields
+                return processed_example
+            # do something
+            return wrapper
+        return transform_decorator
+    
+    def log_pv(page_id):
+        def log_pv_decorator(func, *args, **kwargs):
+            def wrapper(func, *args, **kwargs):
+                return func(*args, **kwargs)
+            # Do somthing
+            return wrapper
+        return log_pv_decorator
     
     # def _apply_mapping(self, data, in_out_col_mapping):
     #     if not in_out_col_mapping:

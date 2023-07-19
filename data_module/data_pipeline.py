@@ -151,7 +151,7 @@ class DataPipeline(DummyBase):
             print(f"Load {cache_file_name} from program cache")
             return self.output_cache[trans_id]
         # Read from disk when instructed and available
-        elif not self.regenerate_all and not trans_info.get('regenerate', False) and self._check_cache_exist(trans_id, trans_info) and self._check_input_nodes_cache_exists(trans_info.get('input_node', [])):
+        elif not self.regenerate_all and not trans_info.get('regenerate', False) and self._check_cache_exist(trans_id, trans_info) and (trans_info.get('dont_check_input_cache', False) or self._check_input_nodes_cache_exists(trans_info.get('input_node', []))):
             logger.info(f"Load {cache_file_name} from disk cache")
             logger.info(f"Hash key: {self.node_cache_hash_dict[trans_id]}")
             outputs = self._read_from_cache(trans_id, trans_info)
@@ -161,7 +161,13 @@ class DataPipeline(DummyBase):
         # Initialize functor
         # print(trans_info.transform_name)
         # print(DataTransform_Registry)
-        func = DataTransform_Registry[trans_info.transform_name](use_dummy_data=self.use_dummy_data, global_config=self.global_config)
+        func = DataTransform_Registry[trans_info.transform_name](
+            use_dummy_data=self.use_dummy_data, 
+            global_config=self.global_config,
+            transform_id=trans_id,
+            transform_hash=self.node_cache_hash_dict.get(trans_id, ""),
+            cache_dir=trans_info.get('cache_dir', None),
+        )
         func.setup(**trans_info.get("setup_kwargs", {}))
 
         # print(trans_info)
