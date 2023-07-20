@@ -28,6 +28,7 @@ class DataPipeline(DummyBase):
 
         self.name = self.config.get('name', 'default_pipeline')
         self.cache_dir = Path(global_config.meta.get('default_cache_dir', 'cache/'))
+        self.cache_dir = self.cache_dir / self.name
 
         self.transforms = EasyDict(self.config.transforms)
 
@@ -167,6 +168,7 @@ class DataPipeline(DummyBase):
             transform_id=trans_id,
             transform_hash=self.node_cache_hash_dict.get(trans_id, ""),
             cache_dir=trans_info.get('cache_dir', None),
+            cache_base_dir=self.cache_dir,
         )
         func.setup(**trans_info.get("setup_kwargs", {}))
 

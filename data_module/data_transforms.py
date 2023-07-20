@@ -268,21 +268,24 @@ class HFDatasetTransform(BaseTransform):
                 img_out_fields = out_img_fields or img_path_fields
                 if not batched:
                     for img_out_field in img_out_fields:
-                        img_save_path = os.path.join(self.cache_dir, f"{img_name_memo[name_base_field]}")
+                        image_name = img_name_memo[name_base_field] if len(img_out_fields) == 1 else f"{img_out_field}-{img_name_memo[name_base_field]}"
+                        img_save_path = os.path.join(self.cache_dir, image_name)
                         if save_out_images:
                             processed_example[img_out_field].convert('RGB').save(img_save_path)
                         processed_example[img_out_field] = img_save_path
                 else:
                     for img_out_field in img_out_fields:
                         for i, img_out in enumerate(processed_example[img_out_field]):
-                            img_save_path = os.path.join(self.cache_dir, f"{img_name_memo[name_base_field][i]}")
+                            image_name = img_name_memo[name_base_field][i] if len(img_out_fields) == 1 else f"{img_out_field}-{img_name_memo[name_base_field][i]}"
+                            img_save_path = os.path.join(self.cache_dir, image_name)
                             if save_out_images:
                                 img_out.save(img_save_path)
                             processed_example[img_out_field][i] = img_save_path
                 
-                # Convert in image fields from PIL.Image back to paths
+                # Convert in image fields from PIL.Image back to paths (only for read-only images. Output images would have already been converted to paths)
                 for img_in_field in img_path_fields:
-                    processed_example[img_in_field] = img_path_memo[img_in_field]
+                    if img_in_field not in img_out_fields:
+                        processed_example[img_in_field] = img_path_memo[img_in_field]
 
                 # read images to fields
                 return processed_example
