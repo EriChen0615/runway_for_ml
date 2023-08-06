@@ -58,9 +58,13 @@ class BaseExecutor(pl.LightningModule):
         self.model_config = model_config
         self.optimizer_config = train_config.get('optimizer_config', None)
         self.use_lora = train_config.get('use_lora', False)
-        self.lora_config = train_config.get('lora_config', {})
+        self.train_lora_config = train_config.get('lora_config', {})
         self.training_config = train_config
+
         self.test_config = test_config
+        self.test_with_lora = test_config.get('test_with_lora', False)
+        self.test_lora_config = test_config.get('test_lora_config', {})
+
         self.additional_kwargs = model_config.get("additional_kwargs", {})
         
         _num_of_sep_token=150
@@ -102,7 +106,7 @@ class BaseExecutor(pl.LightningModule):
         self._init_model(self.model_config)
         logging.info(f"Train with LoRA = {self.use_lora}")
         if self.use_lora:
-            self._apply_lora(self.lora_config)
+            self._apply_lora(self.train_lora_config)
 
         self.use_wandb = False
         for trainer_logger in kwargs.get('logger', []):
@@ -167,8 +171,8 @@ class BaseExecutor(pl.LightningModule):
                     lora_config_kwargs['target_modules'].append(name)
                 # if name.endswith('to_q') or name.endswith('to_v'):
                     # print(name)
-            print(lora_config_kwargs)
-            input("(BREAKPOINT)")
+            logging.info(f"LoRA config: {lora_config_kwargs}")
+            # input("(BREAKPOINT)")
 
             lora_config = LoraConfig(**lora_config_kwargs)
             lora_model = get_peft_model(model_component, lora_config)
@@ -343,6 +347,15 @@ class BaseExecutor(pl.LightningModule):
         valid_name = copy.copy(self.valid_eval_recorder.name)
         self.valid_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
         print("Validation recorder saved to", self.valid_eval_recorder.save_dir)
+
+        # Save LoRA models
+        if self.use_lora:
+            for component_name in self.train_lora_config:
+                lora_model = getattr(self, component_name)
+                save_lora_path = os.path.join(self.global_config.ckpt_dir, f"lora_{component_name}_{self.global_step}")
+                lora_model.save_pretrained(save_lora_path)
+                logging.info(f"LoRA model {component_name} saved to {save_lora_path}")
+
         print("running ", self.valid_eval_pipeline)
         if self.valid_eval_pipeline is not None:
             self.valid_eval_pipeline.reset() # clear cache to make sure all transforms are run as intended

@@ -12,6 +12,7 @@ from .data_transforms import *
 import hashlib
 import json
 from pathlib import Path
+import copy
 
 import logging
 logger = logging.getLogger(__name__)
