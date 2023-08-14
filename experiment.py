@@ -18,7 +18,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.utilities.rank_zero import rank_zero_only
-from utils.seed import set_seed
+from .utils.seed import set_seed
 from easydict import EasyDict
 import json
 import pandas as pd
@@ -67,7 +67,73 @@ class RunwayExperiment:
             seed_everything(config_dict.meta.seed, workers=True)
             # sets seeds for numpy, torch and python.random.
             logger.info(f'All seeds have been set to {config_dict.meta.seed}')
+        
+        self.loggers = None
+        
+        # # make paths to directories available
+        # self.next_train_ver_num = 0
+        # if self.use_versioning:
+        #     self._check_version_and_update_exp_dir()
+        
+        # # self.config_dict['exp_version'] = self.ver_num
+        # self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
+
+        # self.train_dir = self.exp_dir / 'train'
+        # self.train_log_dir = self.train_dir / 'logs'
+        
+        if 'exp_version' not in self.config_dict: 
+            self.next_train_ver_num = 0
+            self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, 0, self.tag)
+            if self.use_versioning:
+                self._check_version_and_update_exp_dir()
+            self.ver_num = self.next_train_ver_num
+            self.config_dict['exp_version'] = self.ver_num
+        self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.config_dict['exp_version'], self.tag)
+
+        self.train_dir = self.exp_dir / 'train'
+        self.train_log_dir = self.train_dir / 'logs'
+        self.ckpt_dir = self.train_dir / 'saved_models'
+        self.test_dir = (self.exp_dir / f'test') / self.test_suffix
     
+
+        # Save some frequently-used paths to config
+        self.config_dict.train_dir = str(self.train_dir)
+        self.config_dict.train_log_dir = str(self.train_log_dir)
+        self.config_dict.test_dir = str(self.test_dir)
+        self.config_dict.ckpt_dir = str(self.ckpt_dir)
+
+        # init wandb loggers
+        ## Delete wandb logs if wandb is enabled
+        if 'wandb' in self.meta_conf['logger_enable']:
+            wandb_conf = self.config_dict.meta.WANDB
+            config = self.config_dict
+
+            all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
+            if len(all_runs) > 0 and config.mode == 'train' and config.reset:
+                delete_confirm = 'n'
+                dirs = [self.exp_dir]
+                # Reset all the folders
+                print("You are deleting following dirs: ", dirs, "input y to continue")
+                if config.args.override or config.args.get('force_reset', False): # better naming than override, without breaking existing code
+                    delete_confirm = 'y'
+                else:
+                    delete_confirm = input()
+                if delete_confirm == 'y':
+                    for dir in dirs:
+                        try:
+                            delete_dir(dir)
+                        except Exception as e:
+                            print(e)
+                else:
+                    print("reset cancelled.")
+                if config.reset and config.mode == "train" and delete_confirm == 'y':
+                    reset_wandb_runs(all_runs)
+            else:
+                if len(all_runs) > 0:
+                    wandb_conf.id=all_runs[0].id
+                    wandb_conf.resume="must"
+            # update the original config_dict
+            self.config_dict.meta.WANDB.update(wandb_conf)
 
     
     def _make_exp_full_name(self, exp_name, ver_num, tag):
@@ -87,8 +153,8 @@ class RunwayExperiment:
     
     def _check_version_and_update_exp_dir(self):
         while os.path.exists(self.exp_dir):
-            self.ver_num += 1
-            self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
+            self.next_train_ver_num += 1
+            self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.next_train_ver_num, self.tag)
 
     def init_loggers(self, mode='train'):
         self.logger_enable = self.meta_conf['logger_enable']
@@ -96,7 +162,7 @@ class RunwayExperiment:
         loggers = []
         if mode == 'train':
             log_dir = self.train_log_dir
-        elif mode == 'test':
+        elif mode == 'test' or mode == 'eval':
             log_dir = self.test_dir
         for logger_type in self.logger_enable:
             if logger_type == "csv":
@@ -116,9 +182,9 @@ class RunwayExperiment:
                     os.environ['WANDB_CACHE_DIR'] = WANDB_CACHE_DIR
                 
                 # add base_model as a tag
-                wandb_conf.tags.append(self.config_dict.model_config.base_model)
+                wandb_conf.tags.append(self.config_dict.model_config.get('base_model', self.config_dict.model_config.get('model_version', 'NoBaseModelInfo')))
                 # add modules as tags
-                wandb_conf.tags.extend(self.config_dict.model_config.modules)
+                # wandb_conf.tags.extend(self.config_dict.model_config.modules) # not every model has .modules
 
                 logger.info('init wandb logger with the following settings: {}'.format(wandb_conf))
 
@@ -127,7 +193,7 @@ class RunwayExperiment:
                 )
                 loggers.append(wandb_logger)
             elif logger_type == 'metrics_history':
-                from utils.metrics_log_callback import MetricsHistoryLogger
+                from .utils.metrics_log_callback import MetricsHistoryLogger
                 metrics_history_logger = MetricsHistoryLogger()
                 loggers.append(metrics_history_logger)
 
@@ -148,7 +214,7 @@ class RunwayExperiment:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(Formatter(log_console_format))
-        from utils.color_logging import CustomFormatter
+        from .utils.color_logging import CustomFormatter
         custom_output_formatter = CustomFormatter(custom_format=log_console_format)
         console_handler.setFormatter(custom_output_formatter)
 
@@ -186,6 +252,8 @@ class RunwayExperiment:
     def init_executor(self, mode='train'):
         meta_config = self.config_dict.meta
         dp_config = self.config_dict.data_pipeline
+        valid_eval_pipeline_config = self.config_dict.eval.get('valid_eval_pipeline_config', None)
+        test_eval_pipeline_config = self.config_dict.eval.get('test_eval_pipeline_config', None)
         eval_pipeline_config = self.config_dict.eval.get('eval_pipeline_config', None)
         executor_config = self.config_dict.executor
         model_config = self.config_dict.model_config
@@ -196,7 +264,7 @@ class RunwayExperiment:
         print(self.loggers)
 
         # NOTE: Tokenizer should not by default be initialised.
-        # tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config)
+        tokenizer = util.get_tokenizer(self.config_dict.tokenizer_config) if 'tokenizer_config' in self.config_dict else None
 
         rw_executor = None
         if mode == 'train':
@@ -206,9 +274,10 @@ class RunwayExperiment:
                 mode='train',
                 train_config=train_config,
                 test_config=test_config,
-                # tokenizer=tokenizer,
-                eval_pipeline_config=eval_pipeline_config,
+                tokenizer=tokenizer,
+                valid_eval_pipeline_config=valid_eval_pipeline_config,
                 global_config=self.config_dict,
+                logger=self.loggers,
                 **executor_config.init_kwargs
             )
         elif mode == 'test':
@@ -226,77 +295,82 @@ class RunwayExperiment:
                 mode='test',
                 test_config=test_config,
                 log_file_path=log_file_path,
-                # tokenizer=tokenizer,
+                test_eval_pipeline_config=test_eval_pipeline_config,
+                tokenizer=tokenizer,
                 global_config=self.config_dict,
                 **executor_config.init_kwargs
             )
         return rw_executor
     
-    def save_config_to(self, dir_path):
+    def save_config_to(self, dir_path, config_filename='config'):
         if not os.path.isdir(dir_path):
             os.makedirs(dir_path)
-        file_path = dir_path / 'config.json'
+        file_path = dir_path / f'{config_filename}.json'
         with open(file_path, 'w') as f:
             json.dump(self.config_dict, f, indent=4) # Added some indents to prettify the output
+        logger.info(f"Config file saved to {file_path}")
 
 
 
     def train(self):
         train_config = self.config_dict.train
 
-        self.ver_num = 0
-        self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
+        # self.ver_num = 0
+        # self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
         
-        if self.use_versioning:
-            self._check_version_and_update_exp_dir()
+        # if self.use_versioning:
+        #     self._check_version_and_update_exp_dir()
         
         # Reset the experiment (only used for training)
-        delete_confirm = 'n'
-        config = self.config_dict
-        if config.reset and config.mode == "train":
-            dirs = [self.exp_dir]
-            # Reset all the folders
-            print("You are deleting following dirs: ", dirs, "input y to continue")
-            if config.args.override:
-                delete_confirm = 'y'
-            else:
-                delete_confirm = input()
-            if delete_confirm == 'y':
-                reset_dirs(dirs)
-            else:
-                print("reset cancelled.")
+        # delete_confirm = 'n'
+        # config = self.config_dict
+        # if config.reset and config.mode == "train":
+        #     dirs = [self.exp_dir]
+        #     # Reset all the folders
+        #     print("You are deleting following dirs: ", dirs, "input y to continue")
+        #     if config.args.override or config.args.get('force_reset', False): # better naming than override, without breaking existing code
+        #         delete_confirm = 'y'
+        #     else:
+        #         delete_confirm = input()
+        #     if delete_confirm == 'y':
+        #         for dir in dirs:
+        #             try:
+        #                 delete_dir(dir)
+        #             except Exception as e:
+        #                 print(e)
+        #     else:
+        #         print("reset cancelled.")
         
         
 
 
-        self.config_dict['exp_version'] = self.ver_num
+        # self.config_dict['exp_version'] = self.ver_num
 
-        self.train_dir = self.exp_dir / 'train'
-        self.train_log_dir = self.train_dir / 'logs'
-        self.ckpt_dir = self.train_dir / 'saved_models'
+        # self.train_dir = self.exp_dir / 'train'
+        # self.train_log_dir = self.train_dir / 'logs'
+        # self.ckpt_dir = self.train_dir / 'saved_models'
         
         self.setup_sys_logs(self.train_log_dir)
 
         # Save some frequently-used paths to config
-        self.config_dict.root_exp_dir = str(self.root_exp_dir)
         self.config_dict.train_dir = str(self.train_dir)
         self.config_dict.log_dir = str(self.train_log_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
 
         ## Delete wandb logs if wandb is enabled
-        if 'wandb' in self.meta_conf['logger_enable']:
-            wandb_conf = self.config_dict.meta.WANDB
-            config = self.config_dict
+        # if 'wandb' in self.meta_conf['logger_enable']:
+        #     wandb_conf = self.config_dict.meta.WANDB
+        #     config = self.config_dict
 
-            all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
-            if config.reset and config.mode == "train" and delete_confirm == 'y':
-                reset_wandb_runs(all_runs)
-            else:
-                if len(all_runs) > 0:
-                    wandb_conf.id=all_runs[0].id
-                    wandb_conf.resume="must"
-            # update the original config_dict
-            self.config_dict.meta.WANDB.update(wandb_conf)
+        #     all_runs = wandb.Api(timeout=19).runs(path=f'{wandb_conf.entity}/{wandb_conf.project}',  filters={"config.experiment_name": config.experiment_name})
+        #     if config.reset and config.mode == "train" and delete_confirm == 'y':
+        #         reset_wandb_runs(all_runs)
+        #     else:
+        #         if len(all_runs) > 0:
+        #             wandb_conf.id=all_runs[0].id
+        #             wandb_conf.resume="must"
+        #     # update the original config_dict
+        #     self.config_dict.meta.WANDB.update(wandb_conf)
 
 
         self.rw_executor = self.init_executor(mode='train') 
@@ -320,7 +394,7 @@ class RunwayExperiment:
         self.save_config_to(self.train_dir)
 
         # 0. Load args from config_dict
-        args = self.config_dict.args
+        args = train_config.get('trainer_args', self.config_dict.get('args', {})) # additive change. More descriptive naming
         
         # 1. trainer parameters specified in train configs
         trainer_paras = train_config.get('trainer_paras', {})
@@ -340,7 +414,8 @@ class RunwayExperiment:
             additional_args['val_check_interval'] = trainer_paras.val_check_interval * trainer_paras.get("accumulate_grad_batches", 1)
         
         # trainer from args
-        trainer = Trainer.from_argparse_args(args, **additional_args)
+        # trainer = Trainer.from_argparse_args(args, **additional_args)
+        trainer = Trainer(**args, **additional_args)
         logger.info(f"arguments passed to trainer: {str(args)}")
         logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
         
@@ -348,21 +423,21 @@ class RunwayExperiment:
         trainer.fit(self.rw_executor, **train_config.get('trainer_fit_paras', {}))
     
     def test(self):
+        logger.info("Testing starts...")
         test_config = self.config_dict.test
 
         if self.use_versioning:
             assert 'exp_version' in self.config_dict, "You need to specify experiment version to run test!"
-            self.ver_num = self.config_dict['exp_version']
-        else:
-            self.ver_num = 0
+        #     self.ver_num = self.config_dict['exp_version']
+        # else:
+        #     self.ver_num = 0
         
-        self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
-        self.train_dir = self.exp_dir / 'train'
-        self.ckpt_dir = self.train_dir / 'saved_models'
-        self.test_dir = (self.exp_dir / f'test') / self.test_suffix
+        # self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
+        # self.train_dir = self.exp_dir / 'train'
+        # self.ckpt_dir = self.train_dir / 'saved_models'
+        # self.test_dir = (self.exp_dir / f'test') / self.test_suffix
 
         # Save some frequently-used paths to config
-        self.config_dict.root_exp_dir = str(self.root_exp_dir)
         self.config_dict.train_dir = str(self.train_dir)
         self.config_dict.test_dir = str(self.test_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
@@ -389,10 +464,11 @@ class RunwayExperiment:
         # trainer = pl.Trainer(**test_config.get('trainer_paras', {}), default_root_dir=self.test_dir)
         
         # 0. Load args from config_dict
-        args = self.config_dict.args
+        args = test_config.get('trainer_args', self.config_dict.get('args', {}))
         
         # 1. setup additional args
-        additional_args = {}
+        trainer_paras = test_config.get('trainer_paras', {})
+        additional_args = trainer_paras.copy()
 
         # 2. update loggers
         additional_args.update({
@@ -407,16 +483,21 @@ class RunwayExperiment:
         
         
         # trainer from args
-        trainer = Trainer.from_argparse_args(args, **additional_args)
+        # trainer = Trainer.from_argparse_args(args, **additional_args)
+        trainer = Trainer(**args, **additional_args) # from_argparse_args is deprecated
         logger.info(f"arguments passed to trainer: {str(args)}")
         logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
         
         # Auto-find checkpoints
+        logger.debug(f"ckpt_dir: {self.ckpt_dir}")
+        logger.debug(f"checkpoint name:{test_config.get('checkpoint_name', '')}")
+        logger.debug(f"load_model_path: {test_config.get('load_model_path', None)}")
+        logger.debug(f"load_best_model: {test_config.get('load_best_model', False)}")
         checkpoint_to_load = get_checkpoint_model_path(
             saved_model_path=self.ckpt_dir,
-            load_checkpoint_name=test_config.checkpoint_name, 
-            load_model_path=test_config.load_model_path, 
-            load_best_model=test_config.load_best_model,
+            load_checkpoint_name=test_config.get('checkpoint_name', ''), 
+            load_model_path=test_config.get('load_model_path', None), 
+            load_best_model=test_config.get('load_best_model', False),
         )
         if not checkpoint_to_load:
             logger.error("No checkpoint found. Please check your config file.")
@@ -426,34 +507,59 @@ class RunwayExperiment:
             self.rw_executor, 
             ckpt_path=checkpoint_to_load if checkpoint_to_load else None
         )
+
+        self.eval()
     
     def eval(self):
+        logger.info("Evaluation starts...")
         eval_config = self.config_dict.eval
         assert 'exp_version' in self.config_dict, "You must experiment version to evaluate"
         assert 'test_suffix' in self.config_dict, "You must specify name of the test run"
-        assert 'eval_op_name' in eval_config, "You must specify name of the evaluation op in .eval"
+        # assert 'eval_op_name' in eval_config, "You must specify name of the evaluation op in .eval"
         
         self.ver_num = self.config_dict['exp_version']
         self.exp_dir = self._make_experiment_dir(self.root_exp_dir, self.exp_name, self.ver_num, self.tag)
         self.test_dir = self.exp_dir / 'test' / f"{self.test_suffix}"
+
+        # Save some frequently-used paths to config
+        self.config_dict.train_dir = str(self.train_dir)
+        self.config_dict.test_dir = str(self.test_dir)
+        self.config_dict.ckpt_dir = str(self.ckpt_dir)
+
         self.setup_sys_logs(self.test_dir)
+        
+        self.save_config_to(self.test_dir, config_filename='eval_config')
 
-        eval_op_name = eval_config['eval_op_name']
-        eval_op_kwargs = eval_config.get('setup_kwargs', {})
-        eval_op = DataTransform_Registry[eval_op_name]()
-        eval_op.setup(**eval_op_kwargs)
+        if self.loggers is None:
+            self.loggers = self.init_loggers(mode='eval')
 
-        test_df = pd.read_csv(self.test_dir / 'test_case.csv')
-        eval_res_dict = eval_op._call(test_df)
+        eval_pipeline_config = eval_config['pipeline_config']
 
-        metric_df = eval_res_dict['metrics']
-        anno_df = eval_res_dict['annotations']
-
-        metric_df.to_csv(self.test_dir / 'metrics.csv')
-        anno_df.to_csv(self.test_dir / 'annotated_test_case.csv')
-
-        print("Saved to:", self.test_dir)
+        eval_pipeline = DataPipeline(eval_pipeline_config, global_config=self.config_dict)
+        eval_output = {}
+        if 'out_ops' in eval_pipeline_config:
+            eval_output = eval_pipeline.get_data(eval_pipeline_config['out_ops'])
+        else:
+            eval_output = eval_pipeline.apply_transforms()
         print("Evaluation completes!")
+        print(eval_output)
+
+        # eval_op_name = eval_config['eval_op_name']
+        # eval_op_kwargs = eval_config.get('setup_kwargs', {})
+        # eval_op = DataTransform_Registry[eval_op_name]()
+        # eval_op.setup(**eval_op_kwargs)
+
+        # test_df = pd.read_csv(self.test_dir / 'test_case.csv')
+        # eval_res_dict = eval_op._call(test_df)
+
+        # metric_df = eval_res_dict['metrics']
+        # anno_df = eval_res_dict['annotations']
+
+        # metric_df.to_csv(self.test_dir / 'metrics.csv')
+        # anno_df.to_csv(self.test_dir / 'annotated_test_case.csv')
+
+        # print("Saved to:", self.test_dir)
+        # print("Evaluation completes!")
 
     
 def get_checkpoint_model_path(
