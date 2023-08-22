@@ -178,7 +178,7 @@ class EvalRecorder:
             if col_length is None:
                 col_length = len(batch_dict[colname])
             else:
-                assert col_length == len(batch_dict[colname]), f"all column must have the same length. But {colname} have length {len(values[colname])} which is unmatched with length = {colname}"
+                assert col_length == len(batch_dict[colname]), f"all column must have the same length. But {colname} have length {len(batch_dict[colname])} which is unmatched with length = {col_length}"
         for i in range(col_length):
             for colname in col_names:
                 self._append_to_sample_logs_col(colname, batch_dict[colname][i], idx=self._log_index)
