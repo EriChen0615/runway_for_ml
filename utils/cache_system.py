@@ -5,7 +5,8 @@ import logging
 logger = logging.getLogger(__name__)
 from .dirs import create_dirs
 from typing import Dict
-
+from pathlib import Path
+from datasets import DatasetDict
 
 def save_cached_data(config, data_to_save, data_name, data_path=''):
 
@@ -69,7 +70,9 @@ def load_cached_data(config, data_name, data_path='', condition=True):
         return None
 
 def cache_file_exists(data_file_name):
-    return os.path.exists(data_file_name)
+    exists = os.path.exists(data_file_name)
+    print(f"attempting to check cache exist: {data_file_name} --> {exists}")
+    return exists
     
 def cache_data_to_disk(
     data_to_save: Dict[str, any],
@@ -83,20 +86,26 @@ def cache_data_to_disk(
     if not os.path.exists(dir_path):
         create_dirs([dir_path])
     
-    data_file_name = os.path.join(dir_path, f"{data_name}.{save_format}")
+    data_file_name = make_cache_file_name(data_name, dir_path, save_format)
     
     if save_format == 'pkl':
         save_pickle_data(data_to_save, data_file_name)
-        print(f"Data saved to {data_file_name}")
+    elif save_format == 'hf':
+        save_hf_data(data_to_save, data_file_name)
     else:
         raise NotImplementedError(f"Saving data to disk with {save_format} is not implemented!")
+    print(f"Data saved to {data_file_name}")
 
 def make_cache_file_name(
     data_name: str,
-    dir_path: str,
+    dir_path,
     save_format: str = 'pkl',
+    suffix: str = None,
     ):
-    return os.path.join(dir_path, f"{data_name}.{save_format}")
+    if suffix is None:
+        return os.path.join(str(dir_path), f"{data_name}.{save_format}")
+    else:
+        return os.path.join(str(dir_path), f"{data_name}-{suffix}.{save_format}")
 
 
 def load_data_from_disk(
@@ -110,10 +119,28 @@ def load_data_from_disk(
             loaded_data = load_pickle_data(data_file_name)
             print(f"Data loaded from {data_file_name}")
             return loaded_data
+        elif save_format == 'hf':
+            loaded_data = load_hf_data(data_file_name)
+            print(f"Data loaded from {data_file_name}")
+            return loaded_data
         else:
             raise NotImplementedError(f".{save_format} loading is not implemented in cache system!")
     else:
         return None # data doesn't exist
+
+def load_hf_data(data_file_name):
+    data = DatasetDict.load_from_disk(data_file_name)
+    return data
+
+def save_hf_data(data_to_save, data_file_name):
+    if isinstance(data_to_save, dict):
+        # change to DatasetDict before saving
+        data_to_save = DatasetDict(data_to_save)
+        data_to_save.save_to_disk(data_file_name)
+    elif isinstance(data_to_save, DatasetDict):
+        data_to_save.save_to_disk(data_file_name)
+    else:
+        raise NotImplementedError(f"{type(data_to_save)} type is not implemented in cache system!")
         
 
 def save_pickle_data(data_to_save, data_file_name):
