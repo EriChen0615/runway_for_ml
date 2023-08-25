@@ -344,6 +344,9 @@ class BaseExecutor(pl.LightningModule):
         self.valid_eval_recorder.meta_config.update({'valid_run_count': self.valid_cnt, 'global_step': self.global_step})
 
     def on_validation_end(self) -> None:
+        self.valid_eval_recorder.log_stats_dict({
+            'global_step': self.global_step, 
+        })
         valid_name = copy.copy(self.valid_eval_recorder.name)
         self.valid_eval_recorder.save_to_disk(f"eval_recorder", file_format='json')
         print("Validation recorder saved to", self.valid_eval_recorder.save_dir)

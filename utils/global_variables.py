@@ -1,5 +1,9 @@
 from easydict import EasyDict
 import functools
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 FeatureLoader_Registry = EasyDict() # registry for feature loaders
 DataTransform_Registry = EasyDict() # registry for feature loaders
@@ -18,7 +22,9 @@ def register_to(registry, name=None):
 
 def register_func_to_registry(func, registry, name=None):
     fn = name or func.__name__
-    assert fn not in registry, f"Cannot register {fn} due to duplicated name"
+    # assert fn not in registry, f"Cannot register {fn} due to duplicated name"
+    if fn in registry:
+        logger.warning(f"Overwriting {fn} in registry")
     registry[fn] = func
 
 def register_model(cls):

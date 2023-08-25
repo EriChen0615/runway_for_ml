@@ -17,6 +17,7 @@ import sacrebleu
 from pprint import pprint
 import os
 from PIL import Image
+import wandb
 
 import logging
 logger = logging.getLogger(__file__)
@@ -463,7 +464,7 @@ class MergeAllEvalRecorderAndSave(BaseTransform):
         return eval_recorder
         
 @register_transform_functor
-class ComputeBLEU(BaseTransform):
+class RunwayComputeBLEU(BaseTransform):
     """_summary_
     
     example config:
@@ -500,6 +501,7 @@ class ComputeBLEU(BaseTransform):
             for token in self.special_tokens_to_remove:
                 text = text.replace(token, "")
             return text
+        refs = [_remove_special_tokens(ref).strip() for ref in refs]
         hypos = [_remove_special_tokens(hypo).strip() for hypo in hypos] # remove hypothesis
 
         setence_bleu_score = self.compute_sentence_bleu(hypos, refs)
@@ -527,7 +529,7 @@ class ComputeBLEU(BaseTransform):
         return corpus_bleu
         
 @register_transform_functor
-class DisplayEvalResults(BaseTransform):
+class RunwayDisplayEvalResults(BaseTransform):
     def setup(self, rows_to_display=5, display_format='csv'):
         self.rows_to_display = rows_to_display
         self.display_format = display_format
@@ -549,4 +551,37 @@ class DisplayEvalResults(BaseTransform):
         print(f"Evaluation Report for {self.global_config['experiment_name']}".center(150))
         self.print_boarder()
         pprint(eval_recorder.get_stats_logs(data_format='dict'))
+        return eval_recorder
+
+@register_transform_functor
+class UploadToWandb(BaseTransform):
+    def setup(self, log_stats_dict=True, columns_to_log=None, prefix_to_log=None, wandb_tab_name=None):
+        self.log_stats_dict = log_stats_dict
+        self.columns_to_log = columns_to_log
+        self.prefix_to_log = prefix_to_log
+        self.wandb_tab_name = wandb_tab_name
+    
+    def _call(self, eval_recorder):
+        if not 'wandb' in self.global_config['meta']['logger_enable']:
+            print("wandb is not enabled ('wandb' not in meta.logger_enable). Pass.")
+            return eval_recorder
+        
+        sec_name = self.wandb_tab_name or eval_recorder.name
+        if self.log_stats_dict:
+            stats_dict = eval_recorder.get_stats_logs()
+            # wandb.log({f"{sec_name}/{k}": v for k, v in stats_dict.items()}, step=eval_recorder.get_stats_logs()['global_step'], commit=True)
+            wandb.log({f"{sec_name}/{k}": v for k, v in stats_dict.items()},  commit=True)
+            print(f"Eval Recorder: {sec_name} stats dict uploaded to wandb")
+            print(stats_dict)
+        if not (self.columns_to_log is None and self.prefix_to_log is None):
+            table_data = {}
+            for colname in eval_recorder.get_sample_logs().keys():
+                if (self.columns_to_log is not None and colname in self.columns_to_log) or \
+                (self.prefix_to_log is not None and any([colname.startswith(prefix) for prefix in self.prefix_to_log])):
+                    values = eval_recorder.get_sample_logs_column(colname)
+                    table_data[colname] = values
+            df = pd.DataFrame(table_data)
+            wandb_table = wandb.Table(data=df)
+            wandb.log({f"{sec_name}/table": wandb_table}, step=eval_recorder.get_stats_logs('global_step'), commit=True)    
+            print(f"Eval Recorder: {sec_name} columns {df.columns.tolist()} uploaded to wandb")
         return eval_recorder
