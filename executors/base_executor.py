@@ -176,9 +176,24 @@ class BaseExecutor(pl.LightningModule):
 
             lora_config = LoraConfig(**lora_config_kwargs)
             lora_model = get_peft_model(model_component, lora_config)
+            print(f"setting model dtype from {lora_model.dtype} to {self.use_dtype}")
+            lora_model = lora_model.to(dtype=self.use_dtype)
             setattr(self, component_name, lora_model)
             logging.info(f"Training {model_component} with LoRA. LoRA config = {lora_config}")
     
+    def _compile_model(self, list_of_models_to_compile=['model']):
+        # New: Torch 2.0 compile model
+        from packaging import version
+        pytorch_version = version.parse(torch.__version__)
+        if pytorch_version >= version.parse("2.0.0"):
+            for model_name in list_of_models_to_compile:
+                model = getattr(self, model_name)
+                model = torch.compile(model)
+                setattr(self, model_name, model)
+                logging.info(f"Compiling {model_name} with Torch 2.0")
+        else:
+            raise ValueError(f"Unsupported pytorch version: {pytorch_version}. Please use pytorch >= 2.0.0")
+        
     def prepare_data(self):
         if self.use_data_node:
             self.prepared_data = self.dp.get_data([self.use_data_node], explode=True)

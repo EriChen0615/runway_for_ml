@@ -17,10 +17,18 @@ import sacrebleu
 from pprint import pprint
 import os
 from PIL import Image
+import random
+import string
+from collections import defaultdict
 
 import logging
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.INFO)
+
+def random_string(length=10):
+    """Generate a random string of letters and digits."""
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for i in range(length))
 
 def register_transform(fn):
     register_func_to_registry(fn, DataTransform_Registry)
@@ -266,6 +274,8 @@ class HFDatasetTransform(BaseTransform):
                 name_base_field = img_path_fields[0] #TODO can be more flexible with naming
 
                 img_out_fields = out_img_fields or img_path_fields
+                # img_out_fields_cnt = defaultdict(int) 
+
                 if not batched:
                     for img_out_field in img_out_fields:
                         image_name = img_name_memo[name_base_field] if len(img_out_fields) == 1 else f"{img_out_field}-{img_name_memo[name_base_field]}"
@@ -274,12 +284,25 @@ class HFDatasetTransform(BaseTransform):
                             processed_example[img_out_field].convert('RGB').save(img_save_path)
                         processed_example[img_out_field] = img_save_path
                 else:
-                    for img_out_field in img_out_fields:
+                    for ii, img_out_field in enumerate(img_out_fields):
+                        name_base_field = img_path_fields[ii] if ii < len(img_path_fields) else img_path_fields[0] #TODO problematic! Need map as input. 
                         for i, img_out in enumerate(processed_example[img_out_field]):
-                            image_name = img_name_memo[name_base_field][i] if len(img_out_fields) == 1 else f"{img_out_field}-{img_name_memo[name_base_field][i]}"
+                            # if i < len(img_name_memo[name_base_field]):
+                            #     image_name = img_name_memo[name_base_field][i] if len(img_out_fields) == 1 else f"{img_out_field}-{img_name_memo[name_base_field][i]}"
+                            # else:
+                            image_name = None
+                            whole_image_name = img_name_memo[name_base_field][i] if i < len(img_name_memo[name_base_field]) else img_name_memo[name_base_field][-1]
+                            img_in_name, img_in_ext = whole_image_name.split('.')
+                            # image_name = f"{img_out_field}-{img_out_fields_cnt[img_out_field]}.{img_in_ext}"
+                            if 'indices' in processed_example:
+                                image_name = f"{processed_example['indices'][i]}-{img_out_field}.{img_in_ext}"
+                            else:
+                                image_name = f"{img_in_name}-{img_out_field}-{i}.{img_in_ext}"
                             img_save_path = os.path.join(self.cache_dir, image_name)
+                            # print(i, img_out, img_save_path)
                             if save_out_images:
                                 img_out.save(img_save_path)
+
                             processed_example[img_out_field][i] = img_save_path
                 
                 # Convert in image fields from PIL.Image back to paths (only for read-only images. Output images would have already been converted to paths)
@@ -335,8 +358,8 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
         self.splits_to_process = splits_to_process
 
     def _call(self, dataset):
-        results = {}
-        for split in ['train', 'test', 'validation']:
+        # results = {}
+        for split in self.splits_to_process:
             # ds = dataset[split].select((i for i in range(100)))
             if split not in dataset:
                 continue
@@ -349,8 +372,8 @@ class HFDatasetTokenizeTransform(HFDatasetTransform):
                     'attention_mask': field_name+'_attention_mask',
                 })
             ds = ds.rename_columns(self.rename_col_dict)
-            results[split] = ds
-        return results
+            dataset[split] = ds
+        return dataset
 
 @register_transform_functor
 class LoadHFDataset(BaseTransform):
@@ -550,3 +573,13 @@ class DisplayEvalResults(BaseTransform):
         self.print_boarder()
         pprint(eval_recorder.get_stats_logs(data_format='dict'))
         return eval_recorder
+
+@register_transform_functor
+class InsertBreakpoint(BaseTransform):
+    def setup(self, print_data=True):
+        self.print_data = print_data
+
+    def _call(self, data):
+        print("Data under inspection:", data)
+        breakpoint()
+        return data
