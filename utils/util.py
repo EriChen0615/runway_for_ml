@@ -1,4 +1,5 @@
 import transformers
+from transformers import AutoTokenizer
 import torch
 import datasets
 
@@ -15,6 +16,13 @@ def get_tokenizer(tokenizer_config):
         # tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.add_tokens(tokenizer_dict.get('additional_tokens', []))
     return tokenizer
+
+def get_tokenizer_auto(tokenizer_config):
+    tokenizer_dict = tokenizer_config
+    tokenizer_name = tokenizer_dict['version_name']
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    return tokenizer
+
 
 def batch_depad(x, attension_mask=None, y=None, pad_len=0):
     max_in_length = torch.max((~(x==0)).sum(dim=-1))+pad_len
