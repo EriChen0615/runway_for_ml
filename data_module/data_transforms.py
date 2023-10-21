@@ -1,6 +1,6 @@
 from easydict import EasyDict
 from ..utils.global_variables import register_to, register_func_to_registry, DataTransform_Registry
-from ..utils.util import get_tokenizer
+from ..utils.util import get_tokenizer, get_tokenizer_auto
 from ..utils.eval_recorder import EvalRecorder
 from transformers import AutoTokenizer
 import transformers
@@ -177,6 +177,8 @@ class HFDatasetTransform(BaseTransform):
     """
     Transform using HuggingFace Dataset utility
     """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
     # @classmethod 
     # def __init__subclass__(cls, **kwargs):
     #     super().__init_subclass__(*args, **kwargs)
@@ -342,10 +344,10 @@ def tokenize_function(tokenizer, field, **kwargs):
 
 @register_transform_functor
 class HFDatasetTokenizeTransform(HFDatasetTransform):
-    def setup(self, rename_col_dict, tokenizer_config: EasyDict, tokenize_fields_list: List, splits_to_process=['train', 'test', 'validation']):
+    def setup(self, rename_col_dict, tokenizer_config: EasyDict, tokenize_fields_list: List, splits_to_process=['train', 'test', 'validation'], _use_auto=False):
         super().setup(rename_col_dict)
         self.tokenize_fields_list = tokenize_fields_list
-        self.tokenizer = get_tokenizer(tokenizer_config)
+        self.tokenizer = get_tokenizer(tokenizer_config) if not _use_auto else get_tokenizer_auto(tokenizer_config)
         self.tokenize_kwargs = tokenizer_config.get(
             'tokenize_kwargs', 
             {
