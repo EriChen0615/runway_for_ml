@@ -356,6 +356,7 @@ class RunwayExperiment:
         self.config_dict.train_dir = str(self.train_dir)
         self.config_dict.log_dir = str(self.train_log_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
+        self.config_dict.root_exp_dir = str(self.root_exp_dir)
 
         ## Delete wandb logs if wandb is enabled
         # if 'wandb' in self.meta_conf['logger_enable']:
@@ -441,6 +442,7 @@ class RunwayExperiment:
         self.config_dict.train_dir = str(self.train_dir)
         self.config_dict.test_dir = str(self.test_dir)
         self.config_dict.ckpt_dir = str(self.ckpt_dir)
+        self.config_dict.root_exp_dir = str(self.root_exp_dir)
 
         self.setup_sys_logs(self.test_dir)
         
@@ -484,7 +486,7 @@ class RunwayExperiment:
         
         # trainer from args
         # trainer = Trainer.from_argparse_args(args, **additional_args)
-        trainer = Trainer(**args, **additional_args) # from_argparse_args is deprecated
+        trainer = Trainer(**additional_args) # from_argparse_args is deprecated
         logger.info(f"arguments passed to trainer: {str(args)}")
         logger.info(f"additional arguments passed to trainer: {str(additional_args)}")
         
